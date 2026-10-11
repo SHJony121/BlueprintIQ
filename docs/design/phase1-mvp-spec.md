@@ -88,7 +88,7 @@ The key boundary: **layers D and E never see a PDF**. They operate on strings an
 Vector PDFs exported from CAD already contain the text with exact coordinates. Reading it directly is exact, free, fast, and reproducible. A VLM would add cost, nondeterminism, and hallucination risk to a problem that doesn't need it yet. AI enters later only where text extraction genuinely can't reach (scans, unlabeled dimensions).
 
 **D2 — `Decimal` arithmetic for values and thresholds.**
-With floats, `0.3 cm → 3.0000000000000004 mm`, which can flip a boundary check. Boundary values are an explicit fixture category, so comparisons use `Decimal` (1 in = 25.4 mm exactly). JSON output serializes these as numbers for client convenience.
+With floats, `0.07 cm * 10` gives `0.7000000000000001` and `0.12 in * 25.4` gives `3.0479999999999996` (verified in M1 tests), which can flip a boundary check. Boundary values are an explicit fixture category, so comparisons use `Decimal` (1 in = 25.4 mm exactly). JSON output serializes quantities as **strings** (e.g. `"4.50"`), which is lossless and preserves the precision as written; numeric JSON input is rejected so no value ever passes through a binary float. (An earlier draft of this spec serialized quantities as JSON numbers; that was superseded in M1.)
 
 **D3 — Two separate status levels.**
 *Extraction status* (`parsed` / `ambiguous`) describes how trustworthy a value is. *Finding status* (`pass` / `fail` / `missing` / `needs_review`) describes the rule outcome. The engine enforces one invariant: **`fail` can only be produced from a `parsed` measurement.** Ambiguous input yields `needs_review`, never a violation.
@@ -154,7 +154,8 @@ About 15 source files and 8 test files. Files are added milestone by milestone, 
 ## 5. Initial Pydantic schemas (sketch — Pydantic v2)
 
 ```python
-Quantity = Annotated[Decimal, PlainSerializer(float, return_type=float, when_used="json")]
+# Non-negative finite Decimal; floats and bools rejected; serialized to JSON as a string.
+Quantity = Annotated[Decimal, BeforeValidator(_reject_float), Field(allow_inf_nan=False, ge=0, max_digits=30)]
 
 class _Frozen(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
@@ -476,3 +477,14 @@ Required tests: duplicates with equal values, conflicting thickness (4 mm vs 6 m
 **G. PDF engine.** Keep PyMuPDF for now behind an engine-neutral `TextLine` contract; revisit before publishing. See [ADR-001](adr-001-pdf-engine.md).
 
 **H. Scope of this authorization.** Only M0 (project setup and CI) is authorized. M1–M6 need separate approval.
+
+---
+
+## 13. M1 implementation notes (2026-10-12)
+
+Implemented in `domain/units.py` and `domain/models.py`; supersedes the §5 sketch where they differ.
+
+- **Evidence coordinates:** `SourceEvidence.bbox` is optional (`None` = location unknown, never a fake zero box). When present it must satisfy `x0 <= x1`, `y0 <= y1`, all finite. `InspectionReport` additionally checks each box lies within its page (1 pt tolerance) and that the page exists. Phase 1 extraction is expected to always supply a box; that is asserted by M3 extraction tests, not by the schema.
+- **Cross-field invariants:** a `parsed` dimension must have value, unit and `normalized_value_mm`, with `normalized_value_mm == to_mm(value, unit)`; an `ambiguous` one must have at least one issue and no normalized value. A `pass` or `fail` finding may only reference `parsed` measurements. The report's summary must equal the counts computed from its findings.
+- **Unit conversion** runs in a Decimal context with the Inexact trap on, so an over-long value raises instead of being silently rounded.
+- **Materials** are a separate type with no numeric or unit fields; the value is trimmed and upper-cased, the raw text stays in `source`.
