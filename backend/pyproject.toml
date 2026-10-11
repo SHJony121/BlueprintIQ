@@ -36,6 +36,16 @@ plugins = ["pydantic.mypy"]
 files = ["src"]
 python_version = "3.12"
 
+# PyMuPDF ships without type annotations. Only the three modules that form the
+# PyMuPDF boundary may call its untyped functions; everything else stays strict.
+[[tool.mypy.overrides]]
+module = [
+    "blueprintiq.ingestion.pdf_loader",
+    "blueprintiq.extraction.text_layer",
+    "blueprintiq.extraction.reader",
+]
+disallow_untyped_calls = false
+
 [dependency-groups]
 dev = [
     "httpx>=0.28.1",

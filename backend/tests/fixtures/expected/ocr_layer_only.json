@@ -1,0 +1,5 @@
+{
+  "name": "ocr_layer_only",
+  "description": "Only invisible (3 Tr) text, as in an OCR'd scan.",
+  "error": "NO_TEXT_LAYER"
+}

@@ -504,7 +504,7 @@ Implemented in `extraction/annotation_parser.py`. These rules extend and superse
 | Starts with `THICKNESS:` / `DIAMETER:` / `LENGTH:` / `MATERIAL:` (ASCII, any case, spaces before the colon allowed) | parsed or ambiguous measurement |
 | Same label, but preceded only by non-letters (`- `, `* `, `•`, `1.`, `1)`, `(`, a line break), or followed by a colon look-alike (full-width, ratio `∶`, modifier `꞉`), or written in full-width letters, or containing invisible format characters (soft hyphen, zero-width space) | ambiguous measurement, `unsupported_syntax` — flagged, never dropped, so it cannot hide a conflict. Detection uses NFKC normalization and ASCII-only case folding. |
 | Leading invisible format characters (BOM, zero-width space) | ignored before matching; `raw_text` keeps them |
-| Any other `LABEL:` line, including `MIN THICKNESS:`, `THICKNESS (MIN):`, `NOTE: THICKNESS: …`, `DIA:`, `THK:` | unrecognized annotation (reported, never evaluated) — specification limits never become measurements |
+| Any other `LABEL:` line, including `MIN THICKNESS:`, `THICKNESS (MIN):`, `DIA:`, `THK:` | unrecognized annotation (reported, never evaluated) — specification limits never become measurements. If the rest of the line contains a supported `LABEL:` (e.g. `NOTE: THICKNESS: 2 mm`), that one also becomes an ambiguous measurement (M3, §15.2). |
 | No leading label (`THICKNESS 4 mm`, `THICKNESS = 4 mm`, prose) | ignored |
 | Longer than 500 characters, or not valid Unicode | counted in `skipped_lines`; never truncated or repaired |
 
@@ -528,4 +528,73 @@ Implemented in `extraction/annotation_parser.py`. These rules extend and superse
 
 Words are compared after splitting on space, `.` and `-`, with runs of single letters joined (`E.Q.` → `EQ`).
 
-**Known limitations.** The material checks are a *denylist*: they catch the placeholder, reference and alternative words listed above, but no word list is complete, and two bare grades with no separator word (`SS400 SUS304`) parse as one value. The robust fix is an *allowlist* of accepted grades as a rule (a candidate for a later milestone), not a longer word list. A material written with its standard after `PER` (`A5052P-H34 PER JIS H4000`) is flagged for review — safe, but noisy. Look-alike letters from other scripts (Cyrillic `Е`, Turkish `İ`) or combining accents inside a label are not detected; such lines are ignored rather than parsed. Labels must be English. Lines with a label not at the start but after letters (`NOTE: THICKNESS: 2 mm`) are reported only as the leading label.
+**Known limitations.** The material checks are a *denylist*: they catch the placeholder, reference and alternative words listed above, but no word list is complete, and two bare grades with no separator word (`SS400 SUS304`) parse as one value. The robust fix is an *allowlist* of accepted grades as a rule (a candidate for a later milestone), not a longer word list. A material written with its standard after `PER` (`A5052P-H34 PER JIS H4000`) is flagged for review — safe, but noisy. Look-alike letters from other scripts (Cyrillic `Е`, Turkish `İ`) or combining accents inside a label are not detected; such lines are ignored rather than parsed. Labels must be English. ~~Lines with a label not at the start but after letters (`NOTE: THICKNESS: 2 mm`) are reported only as the leading label.~~ Superseded in M3 (§15.2): every further supported `LABEL:` on a line becomes an ambiguous measurement.
+
+---
+
+## 15. M3 — PDF ingestion, text extraction, and coordinates (2026-10-12)
+
+Implemented in `ingestion/` (layer A), `extraction/text_layer.py` (layer B), `extraction/reader.py` (A + B + D), and `domain/geometry.py`. Supersedes §3.3 where they differ.
+
+### 15.1 Coordinate spaces
+
+| Space | Where | Definition |
+|---|---|---|
+| **Page space** (canonical, stored) | every `BBox`, `PageInfo.width_pt/height_pt` | The visible area (CropBox ∩ MediaBox) of the **unrotated** page; origin at its top-left; y down; PDF points. This is exactly what PyMuPDF's text extraction reports; it does not change when the page has `/Rotate`. |
+| **Viewer space** (derived, never stored) | `domain.geometry.ViewerRect`, `page_to_viewer()` | The page as displayed after the viewer turns it clockwise by `/Rotate`. Used for reading order today and for on-screen overlays later. A distinct type so it can't be mistaken for evidence. |
+| **PDF user space** (file) | `PageInfo.pdf_crop_box` | The file's own coordinates (origin bottom-left, y up). `x_pdf = crop.x0 + x`, `y_pdf = crop.y1 − y`. PDF.js viewports take this space and apply scale and rotation themselves, so the future overlay maps page space → PDF user space → `viewport.convertToViewportRectangle` (to be verified against current PDF.js docs in the frontend milestone). |
+
+`pdf_crop_box` is read from the PDF dictionary (`/CropBox`, default `/MediaBox`, both inherited through `/Parent`, CropBox clipped to MediaBox) and cross-checked against PyMuPDF's crop size; a disagreement is refused. PyMuPDF's `transformation_matrix` is **not** used: on rotated pages it omits the CropBox offset (found by the `cropped_rotated_90` ground truth).
+
+### 15.2 Visibility and segmentation
+
+- Text is read twice: with PyMuPDF's default clipping (what a viewer shows) and with clipping disabled (`clip=INFINITE_RECT`, no `TEXT_MEDIABOX_CLIP`). Characters in invisible render modes (`3 Tr`, `7 Tr`, fill alpha 0) or below 1 pt count as not visible. Per line: all characters visible → kept; none visible → dropped and counted (`hidden_text_lines`); some visible → document refused (`PARTIALLY_VISIBLE_TEXT`), because the visible part of `THICKNESS: 4 mm` could read `THICKNESS: 4 m`. A kept line whose box extends more than 1 pt beyond the page is refused the same way.
+- Clip paths: MuPDF counts a glyph as visible when it merely touches a clip's bounding box. So a glyph overlapping a rectangular clip must lie inside it — within 0.5 pt along the writing direction (cutting the end of a glyph changes the text) and 0.35 em across it (engine boxes include the font ascender, which has no ink). A clip is rectangular when its vertices are exactly the four corners of its bounding box (`re`, or `m l l l` with or without `h`). Any glyph overlapping a non-rectangular clip is refused (its exact coverage is not computed). Conservative: every clip on the page is considered, whatever its scope. PyMuPDF also reports the CropBox as a page-level clip, which gives the crop-edge check a second, independent layer.
+- `/ActualText` replacements are ignored (`TEXT_IGNORE_ACTUALTEXT`): the evidence is the glyphs actually drawn, not a substitute string.
+- PyMuPDF (1.28.2) breaks a baseline into separate lines at about 0.9 em, which can cut a value from its unit (`THICKNESS: 4 m` + `m` would parse as 4 **metres**) or a grade from its number (`MATERIAL: AISI` + `304`). So text on one baseline (same direction, baseline within 0.1 pt) is **joined across the engine's line breaks**, with a space glyph spanning each gap, and split only at empty gaps ≥ **2 em** (`GAP_SPLIT_EM`). Gaps below 2 em read as a space: `AISI 304` is read whole, and `4 m m` is ambiguous. Real space characters never split a line.
+- A glyph drawn twice at the same position (e.g. fill + clip render modes `4 Tr`–`6 Tr`) counts once.
+- Annotations closer than that are indistinguishable from word spacing and are read as one line. The parser then flags **every** supported `LABEL:` on that line as ambiguous (`unsupported_syntax`), including when the line starts with an unsupported label (`SCALE: 1:2 MATERIAL: SS400`, `NOTE: THICKNESS: 2 mm` — the leading label is still reported as unrecognized). None disappears and none is guessed. This supersedes the M2 rule in §14 that kept `NOTE: THICKNESS: …` as an unrecognized label only.
+- Lines are ordered top-to-bottom, left-to-right **in viewer space**.
+
+### 15.3 Supported geometry
+
+| Case | Result |
+|---|---|
+| `/Rotate` 0, 90, 180, 270; text horizontal in page space or drawn upright for the viewer | supported (fixtures for each) |
+| CropBox offset inside MediaBox; boxes inherited from the page tree | supported |
+| Text outside the CropBox or hidden by a clip path | dropped, counted as hidden |
+| Text crossing the CropBox edge or a clip path | `PARTIALLY_VISIBLE_TEXT` |
+| Text at angles other than multiples of 90° | `UNSUPPORTED_GEOMETRY` |
+| `/Rotate` not an integer multiple of 90 (PyMuPDF silently reports 0 for e.g. 135) | `UNSUPPORTED_GEOMETRY` |
+| `/UserUnit` ≠ 1 or not a number, malformed or empty page boxes | `UNSUPPORTED_GEOMETRY` |
+| CropBox reaching past the MediaBox | supported (visible area = intersection) |
+| Text in invisible render mode or below 1 pt | dropped, counted as hidden |
+
+### 15.4 Input validation (in order, cheapest first)
+
+`EMPTY_FILE` → `FILE_TOO_LARGE` (> 10 MiB) → `UNSUPPORTED_FILE_TYPE` (no `%PDF-` at byte 0) → `INVALID_PDF` (unparseable, no pages, unreadable page, a content entry that is not a stream, a Form XObject that draws itself) → `ENCRYPTED_PDF` (needs a password) → `TOO_MANY_PAGES` (> 1) → geometry checks → `PAGE_TOO_COMPLEX` (decoded page content **plus every Form XObject it invokes, multiplied by its invocation count** > 2 MiB; forms nested deeper than 8; or > 100,000 characters — all checked before the costly per-character passes, using bounded zlib decompression for Flate streams) → `TOO_MANY_TEXT_LINES` (> 5000 visible lines, counted after segmentation) → `INVALID_PDF` again if MuPDF **repaired** the file or **warned** about damaged content at any point while reading it (a truncated stream can turn `4 mm` into `4 m`). The warning check fails closed: every warning rejects except a small allow-list that does not affect the text shown (missing ExtGState resource, non-embedded CID font with identity encoding — common in Japanese/Chinese CAD output — and MuPDF's summary/repeat lines) → `NO_TEXT_LAYER` (no visible text, e.g. a scan or an OCR layer only). Any PyMuPDF exception becomes `INVALID_PDF`. Messages never include paths, library error text, or document content, and MuPDF's own stderr output is switched off.
+
+**Decision:** a PDF encrypted with only an *owner* password (permissions only) opens without a password and is accepted, consistent with §6's "password-protected" definition. This can be tightened to reject all encryption if preferred.
+
+### 15.5 Resources and concurrency
+
+PDFs are opened from memory (`pymupdf.open(stream=…)`), never written to disk, and always closed by a context manager. PyMuPDF is not thread-safe, so every PyMuPDF call in the process runs under one lock in `extraction/reader.py`; concurrent callers are serialized (tested with 8 threads). M5 will additionally run extraction on a single worker thread; a process pool remains the upgrade path for parallelism, crash isolation and timeouts.
+
+### 15.6 Fixtures and ground truth
+
+`tests/fixtures/synthetic_pdf.py` is a dependency-free PDF writer: every text run is placed with explicit PDF operators, so expected boxes follow from PDF geometry plus published Adobe AFM metrics (Helvetica, Courier). `tests/fixtures/drawing_specs.py` holds the hand-written expectations (text, order, page geometry, hidden-line count, measurements, unrecognized labels, or the expected rejection code). `scripts/generate_fixtures.py` writes 32 PDFs (22 valid drawings, 10 that must be refused) plus JSON ground truth; output is byte-deterministic and a test fails if committed files drift. Neither PyMuPDF nor BlueprintIQ code produces any expected value.
+
+Box check: the extracted box must contain the AFM ink box (0.5 pt) and exceed it by at most 1 pt along the writing direction and 0.5 em across it (engines use font ascender/descender, which legitimately exceed ink).
+
+### 15.7 Known limitations
+
+- Synthetic fixtures use standard 14 fonts and one text object per annotation; real CAD exports (embedded fonts, per-glyph positioning, Type 3 fonts) are untested.
+- Text visibility accounts for the CropBox, clip paths (bounding-box based, conservative), invisible render modes / zero alpha, and sub-1 pt text. Not detected: white-on-white text, text covered by filled shapes. Text in optional-content layers that are off by default is already excluded by MuPDF, but is not counted as hidden.
+- A font's `/ToUnicode` map is trusted: a PDF that maps the glyph "4" to the character "9" is read as "9". (Detecting this needs glyph rendering or OCR; out of scope.)
+- The cost walk covers page content and Form XObjects. Type 3 glyph procedures, patterns and annotation appearances are not walked, and non-Flate filters are decoded by the engine (bounded by MuPDF's own bomb detector) before measuring. Hard memory/time limits come with the process-pool isolation planned for M5+.
+- The clip rule is conservative: a clip whose scope has already ended (`q … W n … Q`) still counts, so CAD sheets with viewport or hatch clips near annotations may be refused. Scoping clips correctly needs matching drawing and text sequence numbers; deferred until real CAD samples are available.
+- A missing font resource is substituted silently by MuPDF; the text is right but its box width can be a few points off.
+- A line that does not start with a label but contains one (`2X DIAMETER: 10 mm`, `(MIN) THICKNESS: 5 mm`) is flagged ambiguous: the parser cannot tell a measurement from a specification limit there, so it asks for review rather than dropping or trusting it.
+- Annotations closer than 1 em on one baseline become ambiguous rather than separated.
+- Text at non-orthogonal angles rejects the whole drawing.
+- A material followed on the same baseline by unrelated text within about 0.9 em is read together with it and becomes ambiguous (safe, but noisy).

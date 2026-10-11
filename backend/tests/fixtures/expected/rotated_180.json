@@ -1,0 +1,119 @@
+{
+  "name": "rotated_180",
+  "description": "/Rotate 180; text drawn so it reads upright for the viewer.",
+  "page": {
+    "width_pt": 595.0,
+    "height_pt": 842.0,
+    "rotation": 180,
+    "pdf_crop_box": [
+      0.0,
+      0.0,
+      595.0,
+      842.0
+    ]
+  },
+  "lines": [
+    {
+      "text": "THICKNESS: 4 mm",
+      "ink_box": [
+        435.21,
+        739.93,
+        523.0,
+        749.18
+      ],
+      "font_size": 10.0,
+      "advance_axis": "x"
+    },
+    {
+      "text": "DIAMETER: 20 mm",
+      "ink_box": [
+        435.21,
+        719.93,
+        523.0,
+        729.18
+      ],
+      "font_size": 10.0,
+      "advance_axis": "x"
+    },
+    {
+      "text": "LENGTH: 120 mm",
+      "ink_box": [
+        440.76,
+        699.93,
+        523.0,
+        709.18
+      ],
+      "font_size": 10.0,
+      "advance_axis": "x"
+    },
+    {
+      "text": "MATERIAL: SS400",
+      "ink_box": [
+        437.41,
+        679.93,
+        523.0,
+        689.18
+      ],
+      "font_size": 10.0,
+      "advance_axis": "x"
+    },
+    {
+      "text": "TITLE: ROTATED",
+      "ink_box": [
+        442.43,
+        659.93,
+        523.0,
+        669.18
+      ],
+      "font_size": 10.0,
+      "advance_axis": "x"
+    }
+  ],
+  "hidden_lines": 0,
+  "measurements": [
+    {
+      "id": "M1",
+      "kind": "dimension",
+      "dimension_type": "thickness",
+      "raw_text": "THICKNESS: 4 mm",
+      "value": "4",
+      "unit": "mm",
+      "normalized_value_mm": "4",
+      "status": "parsed",
+      "issues": []
+    },
+    {
+      "id": "M2",
+      "kind": "dimension",
+      "dimension_type": "diameter",
+      "raw_text": "DIAMETER: 20 mm",
+      "value": "20",
+      "unit": "mm",
+      "normalized_value_mm": "20",
+      "status": "parsed",
+      "issues": []
+    },
+    {
+      "id": "M3",
+      "kind": "dimension",
+      "dimension_type": "length",
+      "raw_text": "LENGTH: 120 mm",
+      "value": "120",
+      "unit": "mm",
+      "normalized_value_mm": "120",
+      "status": "parsed",
+      "issues": []
+    },
+    {
+      "id": "M4",
+      "kind": "material",
+      "raw_text": "MATERIAL: SS400",
+      "value": "SS400",
+      "status": "parsed",
+      "issues": []
+    }
+  ],
+  "unrecognized": [
+    "TITLE"
+  ]
+}

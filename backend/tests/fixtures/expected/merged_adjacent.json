@@ -1,0 +1,55 @@
+{
+  "name": "merged_adjacent",
+  "description": "Two separate annotations only 2 pt (0.2 em) apart on one baseline. Geometry cannot separate them from a word space, so they read as one line; the parser must flag BOTH as ambiguous rather than lose the material.",
+  "page": {
+    "width_pt": 595.0,
+    "height_pt": 842.0,
+    "rotation": 0,
+    "pdf_crop_box": [
+      0.0,
+      0.0,
+      595.0,
+      842.0
+    ]
+  },
+  "lines": [
+    {
+      "text": "THICKNESS: 4 mm MATERIAL: SS400",
+      "ink_box": [
+        72.0,
+        552.82,
+        247.38,
+        562.07
+      ],
+      "font_size": 10.0,
+      "advance_axis": "x"
+    }
+  ],
+  "hidden_lines": 0,
+  "measurements": [
+    {
+      "id": "M1",
+      "kind": "dimension",
+      "dimension_type": "thickness",
+      "raw_text": "THICKNESS: 4 mm MATERIAL: SS400",
+      "value": null,
+      "unit": null,
+      "normalized_value_mm": null,
+      "status": "ambiguous",
+      "issues": [
+        "unsupported_syntax"
+      ]
+    },
+    {
+      "id": "M2",
+      "kind": "material",
+      "raw_text": "THICKNESS: 4 mm MATERIAL: SS400",
+      "value": null,
+      "status": "ambiguous",
+      "issues": [
+        "unsupported_syntax"
+      ]
+    }
+  ],
+  "unrecognized": []
+}

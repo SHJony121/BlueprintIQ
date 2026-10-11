@@ -1,0 +1,5 @@
+{
+  "name": "rotate_135",
+  "description": "/Rotate 135 is not a multiple of 90 (PyMuPDF reports 0).",
+  "error": "UNSUPPORTED_GEOMETRY"
+}

@@ -138,7 +138,6 @@ def test_supported_materials_are_parsed(text: str, expected: str) -> None:
         ("DIAMETER: \u00d820 mm", ExtractionIssue.UNSUPPORTED_SYNTAX, None, None),
         ("THICKNESS: \uff14 mm", ExtractionIssue.UNSUPPORTED_SYNTAX, None, None),  # full-width 4
         ("THICKNESS: \u0664 mm", ExtractionIssue.UNSUPPORTED_SYNTAX, None, None),  # Arabic-Indic 4
-        ("THICKNESS: 4 mm MATERIAL: SS400", ExtractionIssue.UNSUPPORTED_SYNTAX, None, None),
         ("THICKNESS: " + "9" * 21 + " mm", ExtractionIssue.UNSUPPORTED_SYNTAX, None, None),
         ("THICKNESS: 0." + "0" * 19 + "1 mm", ExtractionIssue.UNSUPPORTED_SYNTAX, None, None),
     ],
@@ -199,7 +198,6 @@ def test_ambiguous_materials_are_flagged_not_guessed(text: str, issue: Extractio
         ("NOMINAL THICKNESS: 4 mm", "NOMINAL THICKNESS"),
         ("COATING THICKNESS: 0.02 mm", "COATING THICKNESS"),
         ("MATERIAL SPEC: JIS G3101", "MATERIAL SPEC"),
-        ("NOTE: THICKNESS: 4 mm", "NOTE"),
         ("DIA: 20 mm", "DIA"),
         ("THK: 4 mm", "THK"),
         ("HARDNESS: 200 HB", "HARDNESS"),
@@ -505,7 +503,6 @@ def test_review_conflict_is_not_hidden_by_a_bullet() -> None:
     [
         "MIN THICKNESS: 5 mm",  # a qualifier with letters stays an unrecognized label
         "COATING THICKNESS: 0.02 mm",
-        "NOTE: THICKNESS: 2 mm",
     ],
 )
 def test_review_letter_prefixes_stay_unrecognized_not_ambiguous(text: str) -> None:
@@ -718,3 +715,130 @@ def test_review2_legitimate_materials_still_parse(value: str) -> None:
     m = only_material(f"MATERIAL: {value}")
     assert m.status is ExtractionStatus.PARSED
     assert m.value == value
+
+
+# ------------------------- M3 integration: annotations merged onto one text line
+
+
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        (
+            "THICKNESS: 4 mm MATERIAL: SS400",
+            [("dimension", "thickness"), ("material", None)],
+        ),
+        (
+            "MATERIAL: SS400 THICKNESS: 4 mm",
+            [("material", None), ("dimension", "thickness")],
+        ),
+        (
+            "DIAMETER: 20 mm LENGTH: 5 mm DIAMETER: 8 mm",
+            [("dimension", "diameter"), ("dimension", "length"), ("dimension", "diameter")],
+        ),
+        ("thickness: 4 mm material:SS400", [("dimension", "thickness"), ("material", None)]),
+    ],
+)
+def test_embedded_supported_labels_each_become_ambiguous(
+    text: str, expected: list[tuple[str, str | None]]
+) -> None:
+    # When two annotations are too close to separate geometrically, every supported
+    # label on the line stays visible downstream, none of them confidently parsed.
+    result = parse_one(text)
+    assert result.unrecognized == ()
+    got = [
+        (m.kind, m.dimension_type.value if isinstance(m, DimensionMeasurement) else None)
+        for m in result.measurements
+    ]
+    assert got == expected
+    for m in result.measurements:
+        assert m.status is ExtractionStatus.AMBIGUOUS
+        assert m.issues == (ExtractionIssue.UNSUPPORTED_SYNTAX,)
+        assert m.source.raw_text == text
+    assert [m.id for m in result.measurements] == [f"M{i + 1}" for i in range(len(expected))]
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "MATERIAL: SS400 THICKNESSES NOTED",  # word, not a label (no colon)
+        "MATERIAL: SS400",
+        "MIN THICKNESS: 5 mm",  # the only label is the leading, unsupported one
+    ],
+)
+def test_embedded_label_rule_needs_a_further_label_with_a_colon(text: str) -> None:
+    result = parse_one(text)
+    assert len(result.measurements) <= 1
+
+
+# ------------- M3 review: merged lines that start with an unsupported label
+
+
+@pytest.mark.parametrize(
+    ("text", "leading", "embedded"),
+    [
+        ("SCALE: 1:2 MATERIAL: SS400", "SCALE", [("material", None)]),
+        ("NOTE: THICKNESS: 2 mm", "NOTE", [("dimension", "thickness")]),
+        ("DRAWN: J. DOE THICKNESS: 2 mm", "DRAWN", [("dimension", "thickness")]),
+        ("MIN THICKNESS: 3 mm THICKNESS: 4 mm", "MIN THICKNESS", [("dimension", "thickness")]),
+    ],
+)
+def test_supported_label_after_an_unsupported_one_stays_visible(
+    text: str, leading: str, embedded: list[tuple[str, str | None]]
+) -> None:
+    result = parse_one(text)
+    assert [u.label for u in result.unrecognized] == [leading]
+    got = [
+        (m.kind, m.dimension_type.value if isinstance(m, DimensionMeasurement) else None)
+        for m in result.measurements
+    ]
+    assert got == embedded
+    assert all(m.status is ExtractionStatus.AMBIGUOUS for m in result.measurements)
+    assert all(m.issues == (ExtractionIssue.UNSUPPORTED_SYNTAX,) for m in result.measurements)
+
+
+def test_label_directly_after_a_value_without_a_space_is_found() -> None:
+    result = parse_one("THICKNESS: 4 mmLENGTH: 120 mm")
+    kinds = [
+        m.dimension_type.value for m in result.measurements if isinstance(m, DimensionMeasurement)
+    ]
+    assert kinds == ["thickness", "length"]
+    assert all(m.status is ExtractionStatus.AMBIGUOUS for m in result.measurements)
+
+
+def test_near_miss_line_with_a_second_annotation_flags_both() -> None:
+    result = parse_one("- THICKNESS: 4 mm MATERIAL: SS400")
+    assert [m.kind for m in result.measurements] == ["dimension", "material"]
+    assert all(m.status is ExtractionStatus.AMBIGUOUS for m in result.measurements)
+
+
+# ------------------------- M3 re-check: word boundaries and lines without a label
+
+
+@pytest.mark.parametrize(
+    "text",
+    ["NOTE: WAVELENGTH: 650 nm", "SCALE: 1:2 CUTLENGTH: 300", "NOTE: SHEETTHICKNESS: PER SPEC"],
+)
+def test_supported_label_inside_a_longer_word_is_not_a_label(text: str) -> None:
+    assert parse_one(text).measurements == ()
+
+
+def test_label_inside_a_longer_word_does_not_flag_a_real_annotation_twice() -> None:
+    result = parse_one("THICKNESS: 4 mm BLANKLENGTH: 120")
+    assert [m.kind for m in result.measurements] == ["dimension"]  # thickness only
+
+
+@pytest.mark.parametrize(
+    ("text", "dim_type"),
+    [
+        ("2X DIAMETER: 10 mm", DimensionType.DIAMETER),
+        ("\u00d820 DIAMETER: 20 mm", DimensionType.DIAMETER),
+        ("(MIN) THICKNESS: 5 mm", DimensionType.THICKNESS),
+    ],
+)
+def test_supported_label_on_a_line_without_a_leading_label_is_flagged(
+    text: str, dim_type: DimensionType
+) -> None:
+    m = only_dimension(text)
+    assert m.dimension_type is dim_type
+    assert m.status is ExtractionStatus.AMBIGUOUS
+    assert m.issues == (ExtractionIssue.UNSUPPORTED_SYNTAX,)

@@ -1,0 +1,187 @@
+{
+  "name": "unit_conversion",
+  "description": "Every supported unit, with exact Decimal normalization.",
+  "page": {
+    "width_pt": 595.0,
+    "height_pt": 842.0,
+    "rotation": 0,
+    "pdf_crop_box": [
+      0.0,
+      0.0,
+      595.0,
+      842.0
+    ]
+  },
+  "lines": [
+    {
+      "text": "THICKNESS: 0.3 cm",
+      "ink_box": [
+        72.0,
+        552.82,
+        164.8,
+        562.07
+      ],
+      "font_size": 10.0,
+      "advance_axis": "x"
+    },
+    {
+      "text": "DIAMETER: 2 in",
+      "ink_box": [
+        72.0,
+        572.82,
+        145.35,
+        582.07
+      ],
+      "font_size": 10.0,
+      "advance_axis": "x"
+    },
+    {
+      "text": "LENGTH: 0.12 m",
+      "ink_box": [
+        72.0,
+        592.82,
+        148.69,
+        602.07
+      ],
+      "font_size": 10.0,
+      "advance_axis": "x"
+    },
+    {
+      "text": "DIAMETER: 0.12 IN",
+      "ink_box": [
+        72.0,
+        612.82,
+        161.47,
+        622.07
+      ],
+      "font_size": 10.0,
+      "advance_axis": "x"
+    },
+    {
+      "text": "LENGTH: 4.50 MM",
+      "ink_box": [
+        72.0,
+        632.82,
+        157.02,
+        642.07
+      ],
+      "font_size": 10.0,
+      "advance_axis": "x"
+    },
+    {
+      "text": "MATERIAL: SS400",
+      "ink_box": [
+        72.0,
+        652.82,
+        157.59,
+        662.07
+      ],
+      "font_size": 10.0,
+      "advance_axis": "x"
+    },
+    {
+      "text": "TITLE: BRACKET",
+      "ink_box": [
+        330.0,
+        717.82,
+        410.02,
+        727.07
+      ],
+      "font_size": 10.0,
+      "advance_axis": "x"
+    },
+    {
+      "text": "SCALE: 1:2",
+      "ink_box": [
+        330.0,
+        737.82,
+        382.25,
+        747.07
+      ],
+      "font_size": 10.0,
+      "advance_axis": "x"
+    },
+    {
+      "text": "DRAWN: SYNTHETIC FIXTURE",
+      "ink_box": [
+        330.0,
+        757.82,
+        475.56,
+        767.07
+      ],
+      "font_size": 10.0,
+      "advance_axis": "x"
+    }
+  ],
+  "hidden_lines": 0,
+  "measurements": [
+    {
+      "id": "M1",
+      "kind": "dimension",
+      "dimension_type": "thickness",
+      "raw_text": "THICKNESS: 0.3 cm",
+      "value": "0.3",
+      "unit": "cm",
+      "normalized_value_mm": "3",
+      "status": "parsed",
+      "issues": []
+    },
+    {
+      "id": "M2",
+      "kind": "dimension",
+      "dimension_type": "diameter",
+      "raw_text": "DIAMETER: 2 in",
+      "value": "2",
+      "unit": "in",
+      "normalized_value_mm": "50.8",
+      "status": "parsed",
+      "issues": []
+    },
+    {
+      "id": "M3",
+      "kind": "dimension",
+      "dimension_type": "length",
+      "raw_text": "LENGTH: 0.12 m",
+      "value": "0.12",
+      "unit": "m",
+      "normalized_value_mm": "120",
+      "status": "parsed",
+      "issues": []
+    },
+    {
+      "id": "M4",
+      "kind": "dimension",
+      "dimension_type": "diameter",
+      "raw_text": "DIAMETER: 0.12 IN",
+      "value": "0.12",
+      "unit": "in",
+      "normalized_value_mm": "3.048",
+      "status": "parsed",
+      "issues": []
+    },
+    {
+      "id": "M5",
+      "kind": "dimension",
+      "dimension_type": "length",
+      "raw_text": "LENGTH: 4.50 MM",
+      "value": "4.50",
+      "unit": "mm",
+      "normalized_value_mm": "4.50",
+      "status": "parsed",
+      "issues": []
+    },
+    {
+      "id": "M6",
+      "kind": "material",
+      "raw_text": "MATERIAL: SS400",
+      "value": "SS400",
+      "status": "parsed",
+      "issues": []
+    }
+  ],
+  "unrecognized": [
+    "TITLE",
+    "SCALE",
+    "DRAWN"
+  ]
+}

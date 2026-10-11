@@ -1,0 +1,199 @@
+{
+  "name": "ambiguous",
+  "description": "Ambiguous and unsupported annotations, plus a specification limit.",
+  "page": {
+    "width_pt": 595.0,
+    "height_pt": 842.0,
+    "rotation": 0,
+    "pdf_crop_box": [
+      0.0,
+      0.0,
+      595.0,
+      842.0
+    ]
+  },
+  "lines": [
+    {
+      "text": "THICKNESS: 4",
+      "ink_box": [
+        72.0,
+        552.82,
+        140.35,
+        562.07
+      ],
+      "font_size": 10.0,
+      "advance_axis": "x"
+    },
+    {
+      "text": "DIAMETER: 2,5 mm",
+      "ink_box": [
+        72.0,
+        572.82,
+        162.57,
+        582.07
+      ],
+      "font_size": 10.0,
+      "advance_axis": "x"
+    },
+    {
+      "text": "LENGTH: 100 ± 0.5 mm",
+      "ink_box": [
+        72.0,
+        592.82,
+        179.54,
+        602.07
+      ],
+      "font_size": 10.0,
+      "advance_axis": "x"
+    },
+    {
+      "text": "THICKNESS: 4 M",
+      "ink_box": [
+        72.0,
+        612.82,
+        151.46,
+        622.07
+      ],
+      "font_size": 10.0,
+      "advance_axis": "x"
+    },
+    {
+      "text": "MATERIAL: TBD",
+      "ink_box": [
+        72.0,
+        632.82,
+        147.57,
+        642.07
+      ],
+      "font_size": 10.0,
+      "advance_axis": "x"
+    },
+    {
+      "text": "MIN THICKNESS: 5 mm",
+      "ink_box": [
+        72.0,
+        652.82,
+        180.9,
+        662.07
+      ],
+      "font_size": 10.0,
+      "advance_axis": "x"
+    },
+    {
+      "text": "HARDNESS: 200 HB",
+      "ink_box": [
+        72.0,
+        672.82,
+        166.47,
+        682.07
+      ],
+      "font_size": 10.0,
+      "advance_axis": "x"
+    },
+    {
+      "text": "TITLE: BRACKET",
+      "ink_box": [
+        330.0,
+        717.82,
+        410.02,
+        727.07
+      ],
+      "font_size": 10.0,
+      "advance_axis": "x"
+    },
+    {
+      "text": "SCALE: 1:2",
+      "ink_box": [
+        330.0,
+        737.82,
+        382.25,
+        747.07
+      ],
+      "font_size": 10.0,
+      "advance_axis": "x"
+    },
+    {
+      "text": "DRAWN: SYNTHETIC FIXTURE",
+      "ink_box": [
+        330.0,
+        757.82,
+        475.56,
+        767.07
+      ],
+      "font_size": 10.0,
+      "advance_axis": "x"
+    }
+  ],
+  "hidden_lines": 0,
+  "measurements": [
+    {
+      "id": "M1",
+      "kind": "dimension",
+      "dimension_type": "thickness",
+      "raw_text": "THICKNESS: 4",
+      "value": "4",
+      "unit": null,
+      "normalized_value_mm": null,
+      "status": "ambiguous",
+      "issues": [
+        "missing_unit"
+      ]
+    },
+    {
+      "id": "M2",
+      "kind": "dimension",
+      "dimension_type": "diameter",
+      "raw_text": "DIAMETER: 2,5 mm",
+      "value": null,
+      "unit": "mm",
+      "normalized_value_mm": null,
+      "status": "ambiguous",
+      "issues": [
+        "decimal_comma"
+      ]
+    },
+    {
+      "id": "M3",
+      "kind": "dimension",
+      "dimension_type": "length",
+      "raw_text": "LENGTH: 100 ± 0.5 mm",
+      "value": null,
+      "unit": null,
+      "normalized_value_mm": null,
+      "status": "ambiguous",
+      "issues": [
+        "unsupported_syntax"
+      ]
+    },
+    {
+      "id": "M4",
+      "kind": "dimension",
+      "dimension_type": "thickness",
+      "raw_text": "THICKNESS: 4 M",
+      "value": "4",
+      "unit": null,
+      "normalized_value_mm": null,
+      "status": "ambiguous",
+      "issues": [
+        "ambiguous_unit_case"
+      ]
+    },
+    {
+      "id": "M5",
+      "kind": "material",
+      "raw_text": "MATERIAL: TBD",
+      "value": null,
+      "status": "ambiguous",
+      "issues": [
+        "missing_value"
+      ]
+    }
+  ],
+  "unrecognized": [
+    "MIN THICKNESS",
+    "HARDNESS",
+    "TITLE",
+    "SCALE",
+    "DRAWN"
+  ]
+}

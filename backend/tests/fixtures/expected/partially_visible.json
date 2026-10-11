@@ -1,0 +1,5 @@
+{
+  "name": "partially_visible",
+  "description": "An annotation crosses the CropBox edge; the visible part would read 'THICKNESS: 4' or worse, so the document is rejected.",
+  "error": "PARTIALLY_VISIBLE_TEXT"
+}

@@ -1,0 +1,5 @@
+{
+  "name": "partially_clipped",
+  "description": "A clip path hides the end of an annotation: some of its characters are invisible although its box is on the page.",
+  "error": "PARTIALLY_VISIBLE_TEXT"
+}

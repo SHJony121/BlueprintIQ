@@ -152,12 +152,33 @@ class BBox(_Frozen):
 
 
 class PageInfo(_Frozen):
-    """Unrotated page size in points, plus the page's /Rotate value."""
+    """Geometry of one page.
+
+    ``width_pt`` x ``height_pt`` is the visible area (the CropBox) of the *unrotated*
+    page; every ``BBox`` on this page lies in that space, origin at its top-left.
+    ``rotation`` is the page's /Rotate value: how a viewer turns the page (clockwise)
+    for display. It never changes stored boxes; see ``domain.geometry`` for viewer space.
+
+    ``pdf_crop_box`` is the same visible area in PDF user space (origin bottom-left,
+    y up), as written in the file. A PDF viewer such as PDF.js works in that space:
+    ``x_pdf = pdf_crop_box[0] + x`` and ``y_pdf = pdf_crop_box[3] - y``.
+    """
 
     page_number: int = Field(ge=1)
     width_pt: float = Field(gt=0, allow_inf_nan=False)
     height_pt: float = Field(gt=0, allow_inf_nan=False)
     rotation: Literal[0, 90, 180, 270]
+    pdf_crop_box: tuple[Coordinate, Coordinate, Coordinate, Coordinate]
+
+    @model_validator(mode="after")
+    def _crop_box_matches_size(self) -> Self:
+        x0, y0, x1, y1 = self.pdf_crop_box
+        if not (x0 < x1 and y0 < y1):
+            raise ValueError("pdf_crop_box must satisfy x0 < x1 and y0 < y1")
+        tol = 0.01
+        if abs((x1 - x0) - self.width_pt) > tol or abs((y1 - y0) - self.height_pt) > tol:
+            raise ValueError("pdf_crop_box size does not match width_pt x height_pt")
+        return self
 
 
 class SourceEvidence(_Frozen):
@@ -332,6 +353,63 @@ class RulesetInfo(_Frozen):
     version: NonBlankStr
 
 
+def _check_unique_measurement_ids(measurements: Iterable[Measurement]) -> None:
+    ids = [m.id for m in measurements]
+    if len(set(ids)) != len(ids):
+        raise ValueError("duplicate measurement ids")
+
+
+def _check_evidence_against_pages(
+    document: DocumentInfo,
+    measurements: Iterable[Measurement],
+    unrecognized: Iterable[UnrecognizedAnnotation],
+) -> None:
+    """Every evidence page must exist and every box must lie on its page."""
+    pages = {p.page_number: p for p in document.pages}
+    sources = [(f"measurement {m.id}", m.source) for m in measurements]
+    sources += [(f"annotation {a.label}", a.source) for a in unrecognized]
+    for label, source in sources:
+        page = pages.get(source.page_number)
+        if page is None:
+            raise ValueError(f"{label} references page {source.page_number}, not in document")
+        box = source.bbox
+        if box is None:
+            continue
+        tol = PAGE_BOUNDS_TOLERANCE_PT
+        if (
+            box.x0 < -tol
+            or box.y0 < -tol
+            or box.x1 > page.width_pt + tol
+            or box.y1 > page.height_pt + tol
+        ):
+            raise ValueError(f"{label} bounding box is outside page {page.page_number} bounds")
+
+
+class DrawingExtraction(_Frozen):
+    """Everything read from one drawing, before any rule is evaluated.
+
+    ``text_lines`` is the number of visible text lines read. ``hidden_text_lines``
+    counts lines that exist in the file but are not visible (outside the CropBox or
+    clipped); they are never used as evidence. ``skipped_lines`` counts lines the
+    parser could not read (overlong or not valid Unicode).
+    """
+
+    document: DocumentInfo
+    measurements: tuple[Measurement, ...]
+    unrecognized_annotations: tuple[UnrecognizedAnnotation, ...]
+    text_lines: int = Field(ge=0)
+    hidden_text_lines: int = Field(ge=0)
+    skipped_lines: int = Field(ge=0)
+
+    @model_validator(mode="after")
+    def _cross_checks(self) -> Self:
+        _check_unique_measurement_ids(self.measurements)
+        _check_evidence_against_pages(
+            self.document, self.measurements, self.unrecognized_annotations
+        )
+        return self
+
+
 class InspectionReport(_Frozen):
     schema_version: Literal["1.0"] = "1.0"
     document: DocumentInfo
@@ -353,32 +431,15 @@ class InspectionReport(_Frozen):
         return self
 
     def _check_unique_ids(self) -> None:
-        m_ids = [m.id for m in self.measurements]
-        if len(set(m_ids)) != len(m_ids):
-            raise ValueError("duplicate measurement ids")
+        _check_unique_measurement_ids(self.measurements)
         f_ids = [f.id for f in self.findings]
         if len(set(f_ids)) != len(f_ids):
             raise ValueError("duplicate finding ids")
 
     def _check_evidence_against_pages(self) -> None:
-        pages = {p.page_number: p for p in self.document.pages}
-        sources = [(f"measurement {m.id}", m.source) for m in self.measurements]
-        sources += [(f"annotation {a.label}", a.source) for a in self.unrecognized_annotations]
-        for label, source in sources:
-            page = pages.get(source.page_number)
-            if page is None:
-                raise ValueError(f"{label} references page {source.page_number}, not in document")
-            box = source.bbox
-            if box is None:
-                continue
-            tol = PAGE_BOUNDS_TOLERANCE_PT
-            if (
-                box.x0 < -tol
-                or box.y0 < -tol
-                or box.x1 > page.width_pt + tol
-                or box.y1 > page.height_pt + tol
-            ):
-                raise ValueError(f"{label} bounding box is outside page {page.page_number} bounds")
+        _check_evidence_against_pages(
+            self.document, self.measurements, self.unrecognized_annotations
+        )
 
     def _check_findings_against_measurements(self) -> None:
         by_id = {m.id: m for m in self.measurements}

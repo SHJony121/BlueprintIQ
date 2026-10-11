@@ -98,6 +98,7 @@ def page_info(**overrides: Any) -> PageInfo:
         "height_pt": 842.0,
         "rotation": 0,
     } | overrides
+    values.setdefault("pdf_crop_box", (0.0, 0.0, values["width_pt"], values["height_pt"]))
     return PageInfo(**values)
 
 
