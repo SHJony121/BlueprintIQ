@@ -101,6 +101,7 @@ class ExtractionIssue(StrEnum):
     MISSING_VALUE = "missing_value"
     MISSING_UNIT = "missing_unit"
     UNSUPPORTED_UNIT = "unsupported_unit"
+    AMBIGUOUS_UNIT_CASE = "ambiguous_unit_case"  # e.g. "M" or "Mm": never guessed
     DECIMAL_COMMA = "decimal_comma"
     UNSUPPORTED_SYNTAX = "unsupported_syntax"
 
@@ -392,3 +393,18 @@ class InspectionReport(_Frozen):
                         f"finding {f.id} is {f.status.value} but references "
                         f"ambiguous measurement {mid}; it can only need review"
                     )
+
+
+# ------------------------------------------------------------------- text input
+
+
+class TextLine(_Frozen):
+    """One line of text with its location: the engine-neutral input to the parser.
+
+    Produced by a text extractor (M3: PyMuPDF text layer). ``bbox`` is ``None`` when
+    the producer cannot locate the line; it is never invented.
+    """
+
+    text: str
+    page_number: int = Field(ge=1)
+    bbox: BBox | None = None

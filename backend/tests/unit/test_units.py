@@ -5,6 +5,7 @@ from decimal import Decimal
 import pytest
 
 from blueprintiq.domain.units import (
+    AmbiguousUnitCaseError,
     LengthUnit,
     UnitConversionError,
     UnsupportedUnitError,
@@ -71,16 +72,30 @@ def test_to_mm_raises_instead_of_rounding_silently() -> None:
         ("mm", LengthUnit.MM),
         ("MM", LengthUnit.MM),
         (" cm ", LengthUnit.CM),
-        ("M", LengthUnit.M),
+        ("CM", LengthUnit.CM),
+        ("m", LengthUnit.M),
         ("in", LengthUnit.IN),
         ("IN", LengthUnit.IN),
     ],
 )
-def test_parse_unit_accepts_supported_units(text: str, expected: LengthUnit) -> None:
+def test_parse_unit_accepts_exact_spellings(text: str, expected: LengthUnit) -> None:
     assert parse_unit(text) is expected
 
 
-@pytest.mark.parametrize("text", ["", " ", "ft", "yd", "mil", "inch", "millimetre", '"', "μm"])
+@pytest.mark.parametrize("text", ["", " ", "ft", "yd", "mil", "inch", "millimetre", '"', "\u03bcm"])
 def test_parse_unit_rejects_unsupported_units(text: str) -> None:
     with pytest.raises(UnsupportedUnitError):
         parse_unit(text)
+
+
+# Strict matching: a case variant of a supported unit is not silently accepted.
+# "M" is not "m" (all-caps drawings could mean something else), and "Mm" is
+# megametre in SI notation, not millimetre.
+@pytest.mark.parametrize("text", ["M", "Mm", "mM", "Cm", "cM", "In", "iN"])
+def test_parse_unit_rejects_case_variants_as_ambiguous(text: str) -> None:
+    with pytest.raises(AmbiguousUnitCaseError, match="ambiguous"):
+        parse_unit(text)
+
+
+def test_ambiguous_case_error_is_a_kind_of_unsupported_unit() -> None:
+    assert issubclass(AmbiguousUnitCaseError, UnsupportedUnitError)

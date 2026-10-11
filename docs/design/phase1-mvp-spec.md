@@ -488,3 +488,44 @@ Implemented in `domain/units.py` and `domain/models.py`; supersedes the §5 sket
 - **Cross-field invariants:** a `parsed` dimension must have value, unit and `normalized_value_mm`, with `normalized_value_mm == to_mm(value, unit)`; an `ambiguous` one must have at least one issue and no normalized value. A `pass` or `fail` finding may only reference `parsed` measurements. The report's summary must equal the counts computed from its findings.
 - **Unit conversion** runs in a Decimal context with the Inexact trap on, so an over-long value raises instead of being silently rounded.
 - **Materials** are a separate type with no numeric or unit fields; the value is trimmed and upper-cased, the raw text stays in `source`.
+
+---
+
+## 14. M2 parser rules (2026-10-12)
+
+Implemented in `extraction/annotation_parser.py`. These rules extend and supersede §8.1, after an independent review of false-positive risks.
+
+**Input contract.** `TextLine(text, page_number, bbox | None)` — engine-neutral (ADR-001). The parser never imports PyMuPDF (enforced by a test). Measurement ids are `M1..Mn` in input order. Duplicates and conflicts are all returned as separate measurements; their meaning is decided in M4.
+
+**Line classification**
+
+| Line | Result |
+|---|---|
+| Starts with `THICKNESS:` / `DIAMETER:` / `LENGTH:` / `MATERIAL:` (ASCII, any case, spaces before the colon allowed) | parsed or ambiguous measurement |
+| Same label, but preceded only by non-letters (`- `, `* `, `•`, `1.`, `1)`, `(`, a line break), or followed by a colon look-alike (full-width, ratio `∶`, modifier `꞉`), or written in full-width letters, or containing invisible format characters (soft hyphen, zero-width space) | ambiguous measurement, `unsupported_syntax` — flagged, never dropped, so it cannot hide a conflict. Detection uses NFKC normalization and ASCII-only case folding. |
+| Leading invisible format characters (BOM, zero-width space) | ignored before matching; `raw_text` keeps them |
+| Any other `LABEL:` line, including `MIN THICKNESS:`, `THICKNESS (MIN):`, `NOTE: THICKNESS: …`, `DIA:`, `THK:` | unrecognized annotation (reported, never evaluated) — specification limits never become measurements |
+| No leading label (`THICKNESS 4 mm`, `THICKNESS = 4 mm`, prose) | ignored |
+| Longer than 500 characters, or not valid Unicode | counted in `skipped_lines`; never truncated or repaired |
+
+**Dimension values.** Number = ASCII `[0-9]+(.[0-9]+)?`, at most 20 digits. Only space or no-break space between number and unit; only those are trimmed from the ends of a value, so a control character or line break anywhere in the value is flagged. **Strict unit spellings (owner decision):** `mm`, `MM`, `cm`, `CM`, `m`, `in`, `IN`. Any other case variant of a supported unit (`M`, `Mm`, `mM`, `Cm`, `In`) is never converted — `M` is not read as metres and `Mm` (megametre in SI) is not read as millimetres. This supersedes "case-insensitive" in §8.1.
+
+| Value | Issue |
+|---|---|
+| empty | `missing_value` |
+| number, no unit | `missing_unit` (value kept) |
+| number + case variant of a supported unit (`4 M`, `8M`, `4 Mm`, `2 In`) | `ambiguous_unit_case` (value kept, no conversion) |
+| number + unit-like token that is not a supported unit (`ft`, `inch`, `"`, `μm`) | `unsupported_unit` (value kept) |
+| `2,5 mm`, `1,000 mm` | `decimal_comma` (no value: 2.5 or 2500?) |
+| tolerance (`±`, `+/-`), range, sign, exponent, qualifier (`MIN`, `MAX`, `TYP`, `REF`, `NOM`…), trailing punctuation, extra words, control characters / line breaks, non-ASCII digits, > 20 digits | `unsupported_syntax` (no value) |
+
+**Material values.** Tokens of `[A-Za-z0-9.-]` separated by single spaces, ≤ 64 characters; normalized to upper case.
+
+| Value | Issue |
+|---|---|
+| empty, or a placeholder (`TBD`, `T.B.D.`, `N/A`, `N.A.`, `N.S.`, `NONE`, `UNKNOWN`, `TO BE DETERMINED`, `TO BE CONFIRMED`, `NOT SPECIFIED`, `NOT APPLICABLE`, `PENDING`, `VARIOUS`, `ANY`, `NIL`, `XXX`, `?`, `-`) | `missing_value` |
+| reference (`SEE NOTE 3`, `PER SPEC`, `SAME AS PART 2`, `BY CUSTOMER`, `CUSTOMER SUPPLIED`), alternative or approximation (`OR`, `AND`, `EITHER`, `EQUIV`, `SS400-EQUIV`, `E.Q.`, `SIM`, `TYP`, `APPROX`, `SUBSTITUTE`, `ALTERNATE`, `PREFERRED`, `VS`, `MIN`, `OR BETTER`), other characters, control characters, > 64 chars | `unsupported_syntax` |
+
+Words are compared after splitting on space, `.` and `-`, with runs of single letters joined (`E.Q.` → `EQ`).
+
+**Known limitations.** The material checks are a *denylist*: they catch the placeholder, reference and alternative words listed above, but no word list is complete, and two bare grades with no separator word (`SS400 SUS304`) parse as one value. The robust fix is an *allowlist* of accepted grades as a rule (a candidate for a later milestone), not a longer word list. A material written with its standard after `PER` (`A5052P-H34 PER JIS H4000`) is flagged for review — safe, but noisy. Look-alike letters from other scripts (Cyrillic `Е`, Turkish `İ`) or combining accents inside a label are not detected; such lines are ignored rather than parsed. Labels must be English. Lines with a label not at the start but after letters (`NOTE: THICKNESS: 2 mm`) are reported only as the leading label.

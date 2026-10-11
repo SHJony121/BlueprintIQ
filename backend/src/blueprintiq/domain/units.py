@@ -39,19 +39,48 @@ class UnsupportedUnitError(UnitError):
     """The unit text is not one of the supported length units."""
 
 
+class AmbiguousUnitCaseError(UnsupportedUnitError):
+    """The text is a case variant of a supported unit that is not an accepted spelling."""
+
+
 class UnitConversionError(UnitError):
     """The value cannot be converted exactly."""
 
 
+# Strict spellings. Lower case, plus the all-caps forms common on drawings, except
+# for metres: "M" is not accepted as "m", and mixed case ("Mm" is megametre in SI
+# notation) is never guessed.
+_ACCEPTED_SPELLINGS = MappingProxyType(
+    {
+        "mm": LengthUnit.MM,
+        "MM": LengthUnit.MM,
+        "cm": LengthUnit.CM,
+        "CM": LengthUnit.CM,
+        "m": LengthUnit.M,
+        "in": LengthUnit.IN,
+        "IN": LengthUnit.IN,
+    }
+)
+
+
 def parse_unit(text: str) -> LengthUnit:
-    """Parse unit text (case-insensitive, surrounding whitespace ignored)."""
-    try:
-        return LengthUnit(text.strip().lower())
-    except ValueError:
-        supported = ", ".join(unit.value for unit in LengthUnit)
-        raise UnsupportedUnitError(
-            f"Unsupported length unit {text!r}; supported units: {supported}"
-        ) from None
+    """Parse unit text with strict spelling; surrounding whitespace is ignored.
+
+    Raises:
+        AmbiguousUnitCaseError: a case variant of a supported unit, e.g. ``M`` or ``Mm``.
+        UnsupportedUnitError: anything else that is not an accepted spelling.
+    """
+    stripped = text.strip()
+    unit = _ACCEPTED_SPELLINGS.get(stripped)
+    if unit is not None:
+        return unit
+    accepted = ", ".join(_ACCEPTED_SPELLINGS)
+    if stripped.lower() in {u.value for u in LengthUnit}:
+        raise AmbiguousUnitCaseError(
+            f"Unit {text!r} is an ambiguous spelling of {stripped.lower()!r}; "
+            f"accepted spellings: {accepted}"
+        )
+    raise UnsupportedUnitError(f"Unsupported length unit {text!r}; accepted spellings: {accepted}")
 
 
 def to_mm(value: Decimal, unit: LengthUnit) -> Decimal:
