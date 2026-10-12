@@ -64,9 +64,9 @@ const evidenceFor = (sha: string, overrides: Partial<ViewerEvidence> = {}): View
 
 function show(
   source: PdfSource,
-  props: { file: File | null; evidence?: ViewerEvidence | null; inspection?: InspectionPhase; selectedKey?: string | null },
+  props: { file: File | null; evidence?: ViewerEvidence | null; inspection?: InspectionPhase; selectedFindingId?: string | null },
 ) {
-  const all = { evidence: null, inspection: "succeeded" as InspectionPhase, selectedKey: null, ...props };
+  const all = { evidence: null, inspection: "succeeded" as InspectionPhase, selectedFindingId: null, ...props };
   const view = render(<DrawingViewer source={source} {...all} />);
   return {
     ...view,
@@ -134,7 +134,7 @@ describe("drawing evidence only on the inspected document", () => {
     expect(renders.at(-1)!.scale).toBeCloseTo(scale, 12);
     const [element] = boxes();
     expect(element!.dataset.status).toBe("fail");
-    expect(element!.getAttribute("aria-label")).toBe("Fail: THK-MIN-001, finding F1, measurement M1");
+    expect(element!.getAttribute("aria-label")).toBe("Fail: THK-MIN-001, finding F1, measurement M1. Select this finding");
     // Unrotated, uncropped: the CSS box is the page-space box times the scale.
     expect(parseFloat(element!.style.left)).toBeCloseTo(72 * scale, 9);
     expect(parseFloat(element!.style.top)).toBeCloseTo(549.3 * scale, 9);
@@ -315,7 +315,7 @@ describe("rendering", () => {
   it("does not render again when only the selected box or evidence visibility changes", async () => {
     const { renders, update } = await openWith(SHA_A);
     const before = renders.length;
-    update({ selectedKey: "F1:M1" });
+    update({ selectedFindingId: "F1" });
     expect(boxes()[0]!.getAttribute("aria-current")).toBe("true");
     fireEvent.click(screen.getByRole("checkbox", { name: "Show evidence" }));
     expect(boxes()).toHaveLength(0);
@@ -331,7 +331,7 @@ describe("rendering", () => {
     show(source, {
       file: pdfFile("a.pdf"),
       evidence: evidenceFor(SHA_A, { items: [item(), item({ key: "F2:M2", findingId: "F2", measurementId: "M2", status: "pass" })] }),
-      selectedKey: "F2:M2",
+      selectedFindingId: "F2",
     });
     await act(async () => opens[0]!.resolve({ kind: "opened", pdf: fake.pdf }));
     await waitFor(() => expect(boxes()).toHaveLength(2));

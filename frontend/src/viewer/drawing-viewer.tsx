@@ -1,9 +1,9 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { FindingStatus } from "@/api/types";
 import { FINDING_LABEL } from "@/inspection/labels";
-import type { UnplacedReason, ViewerEvidence } from "./evidence";
+import { UNPLACED_TEXT, type UnplacedReason, type ViewerEvidence } from "./evidence";
 import { EvidenceOverlay, OUTLINE_DESCRIPTION, type PlacedEvidence } from "./evidence-overlay";
 import { boxToViewport, checkPageGeometry } from "./geometry";
 import { PageStage } from "./page-canvas";
@@ -21,8 +21,12 @@ interface DrawingViewerProps {
   /** Evidence from a validated report for this same file, or null. */
   evidence: ViewerEvidence | null;
   inspection: InspectionPhase;
-  /** Emphasise one evidence box by its key ("F4:M3"). */
-  selectedKey?: string | null;
+  /** Emphasise every evidence box of one finding ("F4"). */
+  selectedFindingId?: string | null;
+  /** Changes when the viewer should bring the selection into view (selection made elsewhere). */
+  revealToken?: number | null;
+  /** A box was chosen in the viewer. */
+  onSelectFinding?: (findingId: string) => void;
   source?: PdfSource;
 }
 
@@ -31,7 +35,15 @@ interface DrawingViewerProps {
  * Knows nothing about rules or extraction: it draws what a validated report says, and
  * only on the exact file that report describes.
  */
-export function DrawingViewer({ file, evidence, inspection, selectedKey = null, source = pdfjsSource }: DrawingViewerProps) {
+export function DrawingViewer({
+  file,
+  evidence,
+  inspection,
+  selectedFindingId = null,
+  revealToken = null,
+  onSelectFinding = () => {},
+  source = pdfjsSource,
+}: DrawingViewerProps) {
   const document = useOpenedPdf(file, source);
   switch (document.status) {
     case "empty":
@@ -74,7 +86,9 @@ export function DrawingViewer({ file, evidence, inspection, selectedKey = null, 
           file={file!}
           evidence={evidence}
           inspection={inspection}
-          selectedKey={selectedKey}
+          selectedFindingId={selectedFindingId}
+          revealToken={revealToken}
+          onSelectFinding={onSelectFinding}
         />
       );
   }
@@ -126,13 +140,17 @@ function OpenDrawing({
   file,
   evidence,
   inspection,
-  selectedKey,
+  selectedFindingId,
+  revealToken,
+  onSelectFinding,
 }: {
   pdf: OpenedPdf;
   file: File;
   evidence: ViewerEvidence | null;
   inspection: InspectionPhase;
-  selectedKey: string | null;
+  selectedFindingId: string | null;
+  revealToken: number | null;
+  onSelectFinding: (findingId: string) => void;
 }) {
   const scroller = useRef<HTMLDivElement>(null);
   const [zoom, setZoom] = useState<Zoom>({ mode: "fit" });
@@ -155,6 +173,40 @@ function OpenDrawing({
       .filter((item) => item.pageNumber === 1)
       .map((item) => ({ item, rect: boxToViewport(page, item.bbox, layout.transform) }));
   }, [trust, evidence, layout]);
+
+  // Bring the selected finding's boxes into view when the selection was made elsewhere.
+  // Scrolls the viewer's own area only when the boxes are not already fully visible, never
+  // moves keyboard focus, and depends on the token alone: zooming or resizing never scrolls.
+  const latest = useRef({ placed, selectedFindingId });
+  useEffect(() => {
+    latest.current = { placed, selectedFindingId };
+  });
+  useEffect(() => {
+    if (revealToken === null) return;
+    const area = scroller.current;
+    const stage = area?.querySelector<HTMLElement>("[data-testid=page-stage]");
+    const { placed: boxes, selectedFindingId: id } = latest.current;
+    const mine = boxes.filter((p) => p.item.findingId === id).map((p) => p.rect);
+    if (!area || !stage || mine.length === 0) return;
+    const left = Math.min(...mine.map((r) => r.left));
+    const top = Math.min(...mine.map((r) => r.top));
+    const right = Math.max(...mine.map((r) => r.left + r.width));
+    const bottom = Math.max(...mine.map((r) => r.top + r.height));
+    const a = area.getBoundingClientRect();
+    const s = stage.getBoundingClientRect();
+    const view = {
+      left: s.left - a.left + left,
+      top: s.top - a.top + top,
+      right: s.left - a.left + right,
+      bottom: s.top - a.top + bottom,
+    };
+    const fits = view.left >= 0 && view.top >= 0 && view.right <= area.clientWidth && view.bottom <= area.clientHeight;
+    if (fits) return;
+    area.scrollTo({
+      left: area.scrollLeft + (view.left + view.right) / 2 - area.clientWidth / 2,
+      top: area.scrollTop + (view.top + view.bottom) / 2 - area.clientHeight / 2,
+    });
+  }, [revealToken]);
 
   const percent = Math.round(scale * 100);
   return (
@@ -208,11 +260,11 @@ function OpenDrawing({
       >
         {availableWidth > 0 ? (
           <PageStage page={pdf.page} layout={layout} scale={scale} devicePixelRatio={devicePixelRatio}>
-            {showEvidence && placed.length > 0 ? <EvidenceOverlay placed={placed} page={layout} selectedKey={selectedKey} showLabels={showLabels} /> : null}
+            {showEvidence && placed.length > 0 ? <EvidenceOverlay placed={placed} page={layout} selectedFindingId={selectedFindingId} onSelect={onSelectFinding} showLabels={showLabels} /> : null}
           </PageStage>
         ) : null}
       </div>
-      <EvidenceSummary trust={trust} evidence={evidence} placed={placed} />
+      <EvidenceSummary trust={trust} evidence={evidence} placed={placed} selectedFindingId={selectedFindingId} />
     </div>
   );
 }
@@ -244,23 +296,17 @@ function ToolButton({
   );
 }
 
-const UNPLACED_TEXT: Record<UnplacedReason, string> = {
-  no_measurement: "nothing was found to mark",
-  no_location: "its position is not known",
-  inconsistent: "its evidence disagrees with the measurement",
-  page_missing: "it refers to a page that does not exist",
-  empty_box: "its box is empty",
-  outside_page: "its box lies outside the page",
-};
 
 function EvidenceSummary({
   trust,
   evidence,
   placed,
+  selectedFindingId,
 }: {
   trust: Trust;
   evidence: ViewerEvidence | null;
   placed: readonly PlacedEvidence[];
+  selectedFindingId: string | null;
 }) {
   if (!trust.show) {
     return (
@@ -271,8 +317,14 @@ function EvidenceSummary({
   }
   const statuses = [...new Set(placed.map((p) => p.item.status))] as FindingStatus[];
   const unplaced = evidence?.unplaced ?? [];
+  const selection = describeSelection(selectedFindingId, placed, unplaced);
   return (
     <div data-testid="evidence-status" className="text-sm">
+      {selection !== null ? (
+        <p data-testid="selection-status" className="mb-1 font-medium">
+          {selection}
+        </p>
+      ) : null}
       <p>
         {placed.length === 1 ? "1 evidence box" : `${placed.length} evidence boxes`} on the drawing.
         {statuses.length > 0 ? (
@@ -315,4 +367,32 @@ function Notice({
       <p className={`max-w-[52ch] text-sm ${title !== undefined ? "mt-1" : "text-muted"}`}>{children}</p>
     </div>
   );
+}
+
+/** What the viewer can say about the selected finding: where it is, or why it is not marked. */
+function describeSelection(
+  findingId: string | null,
+  placed: readonly PlacedEvidence[],
+  unplaced: readonly { findingId: string; reason: UnplacedReason }[],
+): string | null {
+  if (findingId === null) return null;
+  const mine = placed.filter((p) => p.item.findingId === findingId);
+  if (mine.length === 0) {
+    const reasons = [...new Set(unplaced.filter((u) => u.findingId === findingId).map((u) => UNPLACED_TEXT[u.reason]))];
+    return `${findingId} is selected, but it is not marked on the drawing${reasons.length > 0 ? `: ${reasons.join("; ")}` : ""}.`;
+  }
+  const others = [
+    ...new Set(
+      placed
+        .filter((p) => p.item.findingId !== findingId && mine.some((m) => overlaps(m.rect, p.rect)))
+        .map((p) => p.item.findingId),
+    ),
+  ];
+  return `${findingId} is selected: ${mine.length === 1 ? "1 box" : `${mine.length} boxes`} on the drawing.${
+    others.length > 0 ? ` Overlaps ${others.join(", ")}; click the box again to switch.` : ""
+  }`;
+}
+
+function overlaps(a: { left: number; top: number; width: number; height: number }, b: typeof a): boolean {
+  return a.left < b.left + b.width && b.left < a.left + a.width && a.top < b.top + b.height && b.top < a.top + a.height;
 }

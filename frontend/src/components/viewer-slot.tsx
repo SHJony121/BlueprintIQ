@@ -7,11 +7,22 @@ interface ViewerSlotProps {
   evidence: ViewerEvidence | null;
   inspection: InspectionPhase;
   pdfSource?: PdfSource;
+  selectedFindingId?: string | null;
+  revealToken?: number | null;
+  onSelectFinding?: (findingId: string) => void;
 }
 
 // The drawing and its evidence. Hidden below the lg breakpoint, where the results get the
 // full width (the viewer needs room to be useful; see docs/frontend-f3.md).
-export function ViewerSlot({ file, evidence, inspection, pdfSource }: ViewerSlotProps) {
+export function ViewerSlot({
+  file,
+  evidence,
+  inspection,
+  pdfSource,
+  selectedFindingId,
+  revealToken,
+  onSelectFinding,
+}: ViewerSlotProps) {
   return (
     <section
       aria-labelledby="viewer-heading"
@@ -21,7 +32,15 @@ export function ViewerSlot({ file, evidence, inspection, pdfSource }: ViewerSlot
       <h2 id="viewer-heading" className="mb-3 text-base font-semibold">
         Drawing
       </h2>
-      <DrawingViewer file={file} evidence={evidence} inspection={inspection} source={pdfSource} />
+      <DrawingViewer
+        file={file}
+        evidence={evidence}
+        inspection={inspection}
+        source={pdfSource}
+        selectedFindingId={selectedFindingId}
+        revealToken={revealToken}
+        onSelectFinding={onSelectFinding}
+      />
     </section>
   );
 }

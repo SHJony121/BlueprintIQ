@@ -70,7 +70,7 @@ export default function ViewerCheck() {
       </button>
       {error ? <p role="alert">{error}</p> : null}
       <div data-testid="harness-viewer" className="w-full">
-        <DrawingViewer file={applied.file} evidence={applied.evidence} inspection="succeeded" selectedKey={applied.selected} />
+        <DrawingViewer file={applied.file} evidence={applied.evidence} inspection="succeeded" selectedFindingId={applied.selected} />
       </div>
     </main>
   );

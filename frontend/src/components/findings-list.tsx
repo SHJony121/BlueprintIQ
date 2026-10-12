@@ -2,9 +2,19 @@ import type { Finding, Measurement } from "@/api/types";
 import { FINDING_ORDER, SEVERITY_LABEL, measurementTypeLabel } from "@/inspection/labels";
 import { FindingBadge } from "./status-badge";
 
+/** Where a finding's evidence can be seen on the drawing, from the report alone. */
+export interface FindingLocation {
+  boxes: number;
+  /** Why some or all of its evidence is not marked, in words. */
+  notMarked: readonly string[];
+}
+
 interface FindingsListProps {
   findings: readonly Finding[];
   measurements: readonly Measurement[];
+  selectedId: string | null;
+  onSelect: (findingId: string) => void;
+  locations: ReadonlyMap<string, FindingLocation>;
 }
 
 /** Problems first; the backend's order is kept within each outcome. */
@@ -14,7 +24,7 @@ function byOutcome(findings: readonly Finding[]): Finding[] {
   );
 }
 
-export function FindingsList({ findings, measurements }: FindingsListProps) {
+export function FindingsList({ findings, measurements, selectedId, onSelect, locations }: FindingsListProps) {
   const byId = new Map(measurements.map((m) => [m.id, m]));
   return (
     <section aria-labelledby="findings-heading">
@@ -26,7 +36,14 @@ export function FindingsList({ findings, measurements }: FindingsListProps) {
       ) : (
         <ol className="mt-3 flex flex-col gap-3">
           {byOutcome(findings).map((finding) => (
-            <FindingItem key={finding.id} finding={finding} measurements={byId} />
+            <FindingItem
+              key={finding.id}
+              finding={finding}
+              measurements={byId}
+              selected={finding.id === selectedId}
+              location={locations.get(finding.id)}
+              onSelect={onSelect}
+            />
           ))}
         </ol>
       )}
@@ -37,15 +54,28 @@ export function FindingsList({ findings, measurements }: FindingsListProps) {
 function FindingItem({
   finding,
   measurements,
+  selected,
+  location,
+  onSelect,
 }: {
   finding: Finding;
   measurements: ReadonlyMap<string, Measurement>;
+  selected: boolean;
+  location: FindingLocation | undefined;
+  onSelect: (findingId: string) => void;
 }) {
   return (
     <li
       id={`finding-${finding.id}`}
       data-status={finding.status}
-      className="defer-render rounded-md border border-line bg-surface p-4"
+      data-selected={selected ? "true" : undefined}
+      // Mouse convenience: the whole card selects. Links and buttons inside keep their own action.
+      onClick={(event) => {
+        if (!(event.target as HTMLElement).closest("a, button")) onSelect(finding.id);
+      }}
+      className={`rounded-md border bg-surface p-4 ${
+        selected ? "border-accent outline-2 outline-offset-0 outline-accent" : "border-line"
+      }`}
     >
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
         <FindingBadge status={finding.status} />
@@ -89,6 +119,28 @@ function FindingItem({
           })
         )}
       </div>
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-t border-line pt-3 text-sm">
+        <p data-testid={`location-${finding.id}`} className="text-muted">
+          {locationText(location)}
+        </p>
+        <button
+          type="button"
+          aria-pressed={selected}
+          aria-label={`Select finding ${finding.id}`}
+          onClick={() => onSelect(finding.id)}
+          className="rounded-md border border-line bg-surface px-3 py-1 font-medium hover:border-accent aria-pressed:border-accent aria-pressed:bg-accent aria-pressed:text-accent-ink"
+        >
+          {selected ? "Selected" : "Select"}
+        </button>
+      </div>
     </li>
   );
+}
+
+function locationText(location: FindingLocation | undefined): string {
+  if (location === undefined) return "";
+  const boxes = location.boxes === 1 ? "1 evidence box" : `${location.boxes} evidence boxes`;
+  const missing = location.notMarked.length > 0 ? `Not marked: ${location.notMarked.join("; ")}.` : "";
+  if (location.boxes === 0) return missing || "Not marked on the drawing.";
+  return `${boxes} on the drawing.${missing ? ` ${missing}` : ""}`;
 }

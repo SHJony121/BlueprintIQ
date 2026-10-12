@@ -109,3 +109,13 @@ export function buildViewerEvidence(report: InspectionReport): ViewerEvidence {
     unplaced,
   };
 }
+
+/** Why a box is not drawn, in words (shared by the viewer and the findings list). */
+export const UNPLACED_TEXT: Record<UnplacedReason, string> = {
+  no_measurement: "nothing was found to mark",
+  no_location: "its position is not known",
+  inconsistent: "its evidence disagrees with the measurement",
+  page_missing: "it refers to a page that does not exist",
+  empty_box: "its box is empty",
+  outside_page: "its box lies outside the page",
+};

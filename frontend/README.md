@@ -1,6 +1,6 @@
 # BlueprintIQ frontend (Phase 2A)
 
-Local Next.js + TypeScript + Tailwind interface for the BlueprintIQ backend. Done so far: **F0** (scaffold, PDF.js worker check), **F1** (server-side proxy `POST /api/inspections`), **F2** (upload and inspection dashboard) and **F3** (PDF.js rendering with evidence overlays). Linking findings to boxes interactively is F4. See [F0](../docs/frontend-f0.md), [F1](../docs/frontend-f1.md), [F2](../docs/frontend-f2.md) and [F3](../docs/frontend-f3.md).
+Local Next.js + TypeScript + Tailwind interface for the BlueprintIQ backend. Done so far: **F0** (scaffold, PDF.js worker check), **F1** (server-side proxy `POST /api/inspections`), **F2** (upload and inspection dashboard) and **F3** (PDF.js rendering with evidence overlays) and **F4** (selecting a finding or a box highlights the other). See [F0](../docs/frontend-f0.md), [F1](../docs/frontend-f1.md), [F2](../docs/frontend-f2.md), [F3](../docs/frontend-f3.md) and [F4](../docs/frontend-f4.md).
 
 ```bash
 npm ci
