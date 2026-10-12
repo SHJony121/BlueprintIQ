@@ -37,10 +37,19 @@ _CAD = re.compile(
 # Strong signals of a CAD annotation that was not read: kept as uncertain, never guessed.
 _SIGNAL = re.compile(rf"±|[Ø⌀]{_SPACES}[0-9]|[0-9]{_SPACES}°|^[+−-]{_SPACES}{_NUM}")
 _LABEL = re.compile(r"[ \t]*[A-Za-z][A-Za-z0-9 ()./_-]{0,39}?[ \t]*:")
-_MM_NOTE = re.compile(
-    r"(?:ALL )?DIMENSIONS (?:ARE )?IN (?:MM|MILLIMET(?:ER|RE)S?)\.?", re.IGNORECASE
+# A drawing-wide unit note, in English or French. Millimetres vs anything else is decided
+# per part, so a line that prints both languages ("... / Toutes les dimensions ...") counts
+# only when every part says the same thing.
+_NOTE = re.compile(
+    r"(?:ALL DIMENSIONS (?:ARE )?IN|DIMENSIONS (?:ARE )?IN"
+    r"|TOUTES LES (?:DIMENSIONS|COTES) SONT EN|TOUTES LES (?:DIMENSIONS|COTES) EN"
+    r"|DIMENSIONS EN|COTES EN) (?P<unit>[A-ZÀ-Ý]+)\.?",
+    re.IGNORECASE,
 )
-_OTHER_NOTE = re.compile(r"(?:ALL )?DIMENSIONS (?:ARE )?IN (?!MM\b|MILLIMET)[A-Z]+", re.IGNORECASE)
+_MM_WORDS = frozenset({"MM", "MILLIMETER", "MILLIMETERS", "MILLIMETRE", "MILLIMETRES",
+                       "MILLIMÈTRE", "MILLIMÈTRES"})  # fmt: skip
+_NOTE_EDGE = " 	•*-–—.:;"
+_NOTE_SEPARATORS = re.compile(r"\s*[/|]\s*")
 MAX_CAD_ANNOTATIONS = 500
 
 
@@ -66,12 +75,34 @@ def parse_cad_annotations(
 def _unit_note(
     texts: list[tuple[TextLine, str]], method: ExtractionMethod
 ) -> SourceEvidence | None:
-    """The one explicit "all dimensions are in millimetres" note; none if anything conflicts."""
-    mm = [line for line, text in texts if _MM_NOTE.fullmatch(text)]
-    other = any(_OTHER_NOTE.fullmatch(text) for _, text in texts)
-    if not mm or other:
-        return None
-    return _evidence(mm[0], method)
+    """The drawing-wide "all dimensions are in millimetres" note, if nothing contradicts it.
+
+    Leading bullets or dashes are ignored. Several notes (for example one per language)
+    agree only if each of them says millimetres; any other unit, anywhere, means none.
+    """
+    first: TextLine | None = None
+    for line, text in texts:
+        verdicts = _note_verdicts(text)
+        if verdicts is None:
+            continue
+        if not all(verdicts):
+            return None
+        first = first or line
+    return _evidence(first, method) if first is not None else None
+
+
+def _note_verdicts(text: str) -> list[bool] | None:
+    """For each part of a line that is a unit note, whether it says millimetres."""
+    parts = [p.strip(_NOTE_EDGE).upper() for p in _NOTE_SEPARATORS.split(text)]
+    verdicts: list[bool] = []
+    for part in parts:
+        if not part:
+            continue
+        match = _NOTE.fullmatch(part)
+        if match is None:
+            return None  # an ordinary line, not a unit note
+        verdicts.append(match["unit"] in _MM_WORDS)
+    return verdicts or None
 
 
 def _read(

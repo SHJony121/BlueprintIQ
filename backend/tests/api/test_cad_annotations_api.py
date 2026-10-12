@@ -114,3 +114,39 @@ def test_quantities_are_exact_strings_in_json(api: TestClient) -> None:
     annotation = json.loads(response.text)["cad_annotations"][0]
     assert annotation["nominal"] == "2.70"
     assert (annotation["upper_deviation"], annotation["lower_deviation"]) == ("0.10", "-0.10")
+
+
+def test_real_style_title_block_unit_note_and_bilingual_material(api: TestClient) -> None:
+    r = report(
+        api,
+        make(
+            TextRun("-All dimensions are in millimeter.", 72, 780),
+            TextRun("Toutes les dimensions sont en millimètres", 72, 800),
+            TextRun("2.7 ±0.1", 72, 100),
+            TextRun("3 ±0.1", 200, 100),
+            TextRun("Matière / Material: POM C noir", 72, 700),
+        ),
+    )
+    assert r.cad_unit_note is not None
+    assert [
+        (a.source.raw_text, a.status.value, a.unit_source.value) for a in r.cad_annotations
+    ] == [
+        ("2.7 ±0.1", "parsed", "drawing_note"),
+        ("3 ±0.1", "parsed", "drawing_note"),
+    ]
+    assert [m.value for m in r.measurements] == ["POM C NOIR"]
+    assert {f.rule_id: f.status.value for f in r.findings}["MAT-REQ-001"] == "pass"
+    assert {f.status.value for f in r.findings if f.rule_id != "MAT-REQ-001"} == {"missing"}
+
+
+def test_a_conflicting_french_note_keeps_dimensions_uncertain(api: TestClient) -> None:
+    r = report(
+        api,
+        make(
+            TextRun("-All dimensions are in millimeter.", 72, 780),
+            TextRun("Toutes les dimensions sont en pouces", 72, 800),
+            TextRun("2.7 ±0.1", 72, 100),
+        ),
+    )
+    assert r.cad_unit_note is None
+    assert [a.status.value for a in r.cad_annotations] == ["ambiguous"]

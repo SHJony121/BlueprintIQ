@@ -14,14 +14,14 @@ Only a whole text line that matches one of these forms (decimal point, up to 6 i
 | `R1.5` | radius | nominal 1.5 |
 | `75° ±0.5°` | angle | nominal 75 deg, ±0.5 deg (the degree sign is required on both) |
 | `16` | linear, unclassified | only when the unit is known and the number is short |
-| `Material: POM C noir` | material (existing labeled parser) | upper-cased value `POM C NOIR` |
+| `Material: POM C noir`, `Matière: POM C noir` | material (existing labeled parser) | upper-cased value `POM C NOIR` |
 
 Values are exact Decimals (strings in JSON, never floats); the tolerance keeps its signs. Each annotation keeps its original text, page and bounding box.
 
 ## Units
 
 * `mm` written in the annotation (`16 mm`), or
-* one explicit drawing note, `All dimensions are in millimeter` / `... in mm` (reported as `cad_unit_note`), or
+* one explicit drawing note, `All dimensions are in millimeter` / `... in mm`, or its French form (`Toutes les dimensions sont en millimètres`), reported as `cad_unit_note`. Leading bullets or dashes and a trailing full stop are ignored, and one line may print both languages separated by `/` or `|`. Several notes count only if **every** one says millimetres; any other unit anywhere (`inches`, `pouces`, `centimètres`) means no unit is inherited. Or
 * the degree sign for angles.
 
 If a conflicting unit note exists (inches, centimetres, metres) or there is no note, no unit is inherited. A tolerance or symbol form without a unit is kept with its values but marked **ambiguous** (`missing_unit`); a bare number without a unit is not read at all.
@@ -40,6 +40,6 @@ If a conflicting unit note exists (inches, centimetres, metres) or there is no n
 ## Limits
 
 * Single-line forms only; no stacked fractions, thread notes, GD&T frames, chained or ordinate dimensions, or comma decimals.
-* `Matière:` (accented labels) and other languages are not read.
+* Material: `Material:`, `Matière:` and the bilingual `Material / Matière:` (either order) are read when the value follows the colon **on the same line**. A title-block cell whose label and value are printed as separate text lines is not associated, because that would mean guessing across fields. Other languages are not read.
 * A bare number is only a candidate dimension; a title-block value such as a sheet number could be listed as an unclassified dimension when a millimetre note exists.
 * Verified only on generated synthetic drawings. The third-party SolidWorks drawing used for guidance is not stored here and its full annotation coverage is not claimed.

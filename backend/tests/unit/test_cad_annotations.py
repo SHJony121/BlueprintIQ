@@ -134,3 +134,38 @@ def test_labeled_lines_are_left_to_the_existing_parser() -> None:
 def test_ids_follow_reading_order() -> None:
     annotations, _ = read("R1.5", "ignored text", "Ø12", NOTE)
     assert [a.id for a in annotations] == ["C1", "C2"]
+
+
+@pytest.mark.parametrize(
+    "note",
+    [
+        "-All dimensions are in millimeter.",
+        "• All dimensions are in millimeter",
+        "– ALL DIMENSIONS ARE IN MM.",  # noqa: RUF001
+        "Toutes les dimensions sont en millimètres",
+        "All dimensions are in millimeter / Toutes les dimensions sont en millimètres",
+    ],
+)
+def test_a_unit_note_with_punctuation_or_a_french_twin_is_inherited(note: str) -> None:
+    a = one("2.7 ±0.1", note=False)
+    assert a.status is ExtractionStatus.AMBIGUOUS
+    annotations, unit_note = read("2.7 ±0.1", note)
+    assert unit_note is not None and unit_note.raw_text == note
+    assert annotations[0].status is ExtractionStatus.PARSED
+    assert annotations[0].unit_source is UnitSource.DRAWING_NOTE
+
+
+@pytest.mark.parametrize(
+    "notes",
+    [
+        ("-All dimensions are in millimeter.", "Toutes les dimensions sont en pouces"),
+        ("All dimensions are in millimeter", "Toutes les dimensions sont en centimètres"),
+        ("All dimensions are in millimeter / All dimensions are in inches",),
+        ("-All dimensions are in millimeter.", "All dimensions are in inches."),
+    ],
+)
+def test_conflicting_declarations_give_no_unit(notes: tuple[str, ...]) -> None:
+    annotations, unit_note = read("2.7 ±0.1", *notes)
+    assert unit_note is None
+    assert annotations[0].status is ExtractionStatus.AMBIGUOUS
+    assert annotations[0].unit is None

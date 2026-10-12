@@ -74,6 +74,12 @@ _MATERIAL_LABEL = "MATERIAL"
 
 # Strict form: the line starts with an ASCII label directly followed by ":".
 _LABEL = re.compile(r"[ \t]*(?P<label>[A-Za-z][A-Za-z0-9 ()./_-]{0,39}?)[ \t]*:")
+# The material label as a title block may print it: English, French, or both on one line.
+# Same line only; the value must follow the colon. It is read exactly as "MATERIAL:".
+_MATERIAL_ALIAS = re.compile(
+    r"[ 	]*(?:MATERIAL[ 	]*/[ 	]*MATI[EÈ]RE|MATI[EÈ]RE(?:[ 	]*/[ 	]*MATERIAL)?)[ 	]*:",
+    re.IGNORECASE,
+)
 # Near miss: a supported label preceded only by non-letters (bullets, numbering,
 # brackets) and/or followed by a colon look-alike. Matched on NFKC-normalized text
 # with all invisible format characters removed. ASCII-only case folding.
@@ -148,6 +154,9 @@ def parse_lines(lines: Iterable[TextLine], *, method: ExtractionMethod) -> Parse
             continue
 
         text = _strip_leading_format_chars(line.text)
+        alias = _MATERIAL_ALIAS.match(text)
+        if alias is not None:
+            text = "MATERIAL:" + text[alias.end() :]
         measurement_id = f"M{len(measurements) + 1}"
 
         match = _LABEL.match(text)
