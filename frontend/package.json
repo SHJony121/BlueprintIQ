@@ -3,12 +3,15 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "next dev --hostname 127.0.0.1",
     "build": "next build",
-    "start": "next start",
+    "start": "next start --hostname 127.0.0.1",
     "lint": "eslint",
     "typecheck": "next typegen && tsc --noEmit",
-    "check": "npm run lint && npm run typecheck && npm run build"
+    "test": "vitest run --project unit",
+    "test:server": "vitest run --project server",
+    "test:backend": "vitest run --project backend",
+    "check": "npm run lint && npm run typecheck && npm run build && npm test"
   },
   "dependencies": {
     "geist": "1.7.2",
@@ -19,13 +22,14 @@
   },
   "devDependencies": {
     "@tailwindcss/turbopack": "^4",
-    "@types/node": "^20",
+    "@types/node": "^24.19.2",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.4.0",
     "tailwindcss": "^4",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vitest": "5.0.3"
   },
   "description": "BlueprintIQ local inspection interface (Phase 2A)",
   "engines": {

@@ -3,9 +3,10 @@ name: frontend-ci
 on:
   push:
     branches: [main, "feat/**"]
-    paths: ["frontend/**", ".github/workflows/frontend-ci.yml"]
+    # backend/** too: the proxy tests run against the real backend and its fixtures.
+    paths: ["frontend/**", "backend/**", ".github/workflows/frontend-ci.yml"]
   pull_request:
-    paths: ["frontend/**", ".github/workflows/frontend-ci.yml"]
+    paths: ["frontend/**", "backend/**", ".github/workflows/frontend-ci.yml"]
 
 permissions:
   contents: read
@@ -37,10 +38,51 @@ jobs:
       - name: Type check
         run: npm run typecheck
 
+      - name: Unit and proxy handler tests
+        run: npm test
+
       - name: Build
         run: npm run build
+
+      - name: Proxy tests against the production server
+        run: npm run test:server
 
       # Production dependencies only: the remaining advisories are in the ESLint plugin's
       # dev-only glob chain (see docs/frontend-f0.md) and never ship.
       - name: Audit production dependencies
         run: npm audit --omit=dev --audit-level=high
+
+  proxy-backend:
+    # The production Next.js server in front of the real FastAPI backend, all fixtures.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.13.0"
+          enable-cache: true
+          cache-dependency-glob: backend/uv.lock
+
+      - name: Install backend dependencies (locked)
+        working-directory: backend
+        run: uv sync --locked
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies (locked)
+        working-directory: frontend
+        run: npm ci
+
+      - name: Build
+        working-directory: frontend
+        run: npm run build
+
+      - name: Proxy tests against the real backend
+        working-directory: frontend
+        run: npm run test:backend

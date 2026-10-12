@@ -27,6 +27,10 @@
 | **Real industrial CAD PDFs not benchmarked** | Behaviour on real files is unknown. |
 | **Parser/PDF attack surface in MuPDF** | Mitigated by isolation and limits, not eliminated; keep PyMuPDF updated. |
 
+## Frontend proxy (Phase 2A, F1)
+
+The Next.js app forwards uploads to the backend through one server-side route, `POST /api/inspections`. It binds to `127.0.0.1`, refuses foreign `Host`/`Origin` headers, forwards only an allow-listed set of headers to a fixed loopback backend address, counts upload bytes against the 10 MiB limit, caps and validates backend responses, and aborts the backend request when the browser disconnects. That abort **does not cancel backend processing** (see the table above). The proxy adds **no** authentication, rate limiting or TLS and is **not** production-secure. Details: [frontend-f1.md](frontend-f1.md).
+
 ## Licensing
 
 * **PyMuPDF is licensed AGPL-3.0 (or a commercial licence).** The decision for a public release is **unresolved**: publish under AGPL-3.0, obtain a commercial licence, or replace the engine with a permissively licensed one such as pypdfium2 (it would need its own line-grouping and coordinate conversion; PyMuPDF use is confined to `ingestion/pdf_loader.py` and `extraction/text_layer.py`). See [design/adr-001-pdf-engine.md](design/adr-001-pdf-engine.md).
