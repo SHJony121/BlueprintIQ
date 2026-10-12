@@ -3,6 +3,7 @@ import http from "node:http";
 import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import { errorResponse, newRequestId, responseHeaders, type ProxyErrorCode } from "./api-error";
+import { MAX_UPLOAD_BYTES } from "@/lib/limits";
 import type { BackendConfig } from "./backend-config";
 
 // Server-side proxy for POST /api/inspections -> backend POST /api/v1/inspections.
@@ -13,8 +14,9 @@ import type { BackendConfig } from "./backend-config";
 // malformed backend reply is reported as an error instead of a success. See
 // docs/frontend-f1.md for the limits, error codes and the cancellation caveat.
 
-/** Same as the backend's default `max_upload_bytes`. */
-export const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
+// Same value as the backend's default `max_upload_bytes`; shared with the browser's
+// early file check.
+export { MAX_UPLOAD_BYTES };
 
 /** The only backend path the proxy ever requests. */
 export const INSPECTIONS_PATH = "/api/v1/inspections";

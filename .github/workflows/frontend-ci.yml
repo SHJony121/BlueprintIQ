@@ -38,13 +38,17 @@ jobs:
       - name: Type check
         run: npm run typecheck
 
-      - name: Unit and proxy handler tests
+      # The API types are generated from backend/openapi.json; fail if they were not regenerated.
+      - name: Generated API types are current
+        run: npm run api:check
+
+      - name: Unit, proxy handler and component tests
         run: npm test
 
       - name: Build
         run: npm run build
 
-      - name: Proxy tests against the production server
+      - name: Proxy and launch-binding tests against the real Next.js server
         run: npm run test:server
 
       # Production dependencies only: the remaining advisories are in the ESLint plugin's
@@ -83,6 +87,6 @@ jobs:
         working-directory: frontend
         run: npm run build
 
-      - name: Proxy tests against the real backend
+      - name: Proxy and screen tests against the real backend
         working-directory: frontend
         run: npm run test:backend

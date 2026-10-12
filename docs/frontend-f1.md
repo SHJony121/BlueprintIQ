@@ -24,7 +24,7 @@ The browser never learns the backend's address. The proxy only ever requests the
 
 `npm run dev` and `npm run start` bind Next.js to `127.0.0.1` only.
 
-**Warning: start the app only through these scripts.** Next's own default is `0.0.0.0` (all interfaces). If the server is started another way (`npx next start`, an IDE run configuration, a container entrypoint), it listens on the network. A program on another machine can then send `Host: 127.0.0.1:3000` without browser headers, pass the `Host` check, and reach the unauthenticated backend through the proxy. The handler cannot detect the bound address: Next reports an all-interfaces bind as `localhost`. Enforcing the bind at runtime would need a custom server; that is deferred and listed as a remaining risk.
+**Warning: start the app only through these scripts.** Next's own default is `0.0.0.0` (all interfaces). If the server is started another way (`npx next start`, an IDE run configuration, a container entrypoint), it listens on the network. A program on another machine can then send `Host: 127.0.0.1:3000` without browser headers, pass the `Host` check, and reach the unauthenticated backend through the proxy. The handler cannot detect the bound address: Next reports an all-interfaces bind as `localhost`. Enforcing the bind at runtime would need a custom server. **Decision (F2): no custom server is added.** The supported launch commands are `npm run dev` and `npm run start`; the scripts and the actual listening addresses are verified by tests (see [frontend-f2.md](frontend-f2.md#loopback-binding-a-decision-restated)). The `Host` and `Origin` checks described below are not a substitute for loopback binding.
 
 ## Protections
 
@@ -95,7 +95,7 @@ When the browser disconnects, mid-upload or while waiting, the proxy aborts its 
 
 ## Known limitations
 
-* **Loopback binding is enforced only by the npm scripts** (see Configuration).
+* **Loopback binding is enforced only by the npm scripts** (see Configuration), and is verified by tests, not by the proxy.
 * **Early backend answers can be lost.** The backend can answer before it has read the whole body: `503 SERVER_BUSY` under load is decided before reading. It then closes the connection while the proxy is still uploading, and the resulting TCP reset can discard the answer before it is read (observed on Windows with a 4 MiB upload). The browser then gets a `502` (`BACKEND_UNAVAILABLE`, or `BACKEND_INVALID_RESPONSE` if the reset cuts off the answer's body) instead of `503`. HTTP/1.1 has no way to recover this. It is never reported as success.
 * **Trusted local use only.** There is no authentication: any process on the machine can call the proxy. The `Host`/`Origin` checks guard against web pages, not local programs.
 * **Response buffering.** Up to 16 MiB per request is held in memory. Validation adds roughly 3–4× that transiently: the decoded UTF-16 string and the parsed JSON. Backend admission control (4 requests at once) bounds the total in normal use; the proxy itself has no concurrency limit.

@@ -176,6 +176,32 @@ async function startProcess(
   return { port, output: () => output, stop };
 }
 
+/**
+ * Run one of the package.json launch scripts (`start` or `dev`) as npm would, but
+ * without a shell, so the process can be stopped cleanly. The script's own arguments are
+ * used unchanged (that is what is being tested); only a free port is added.
+ */
+export function startLaunchScript(script: "start" | "dev"): Promise<ChildServer> {
+  const command = (
+    JSON.parse(readFileSync(path.join(FRONTEND_DIR, "package.json"), "utf8")) as {
+      scripts: Record<string, string>;
+    }
+  ).scripts[script];
+  const [bin, ...args] = (command ?? "").split(" ");
+  if (bin !== "next") throw new Error(`script "${script}" is not a plain next command: ${command}`);
+  const nextBin = path.join(FRONTEND_DIR, "node_modules/next/dist/bin/next");
+  return startProcess(
+    process.execPath,
+    (port) => [nextBin, ...args, "--port", String(port)],
+    {
+      cwd: FRONTEND_DIR,
+      env: { ...process.env, NEXT_TELEMETRY_DISABLED: "1" },
+      readyPath: "/api/ready",
+      readyStatus: 404,
+    },
+  );
+}
+
 /** The production build served by `next start` on 127.0.0.1 (requires `npm run build`). */
 export function startNext(backendUrl: string | undefined): Promise<ChildServer> {
   const env: NodeJS.ProcessEnv = { ...process.env, NEXT_TELEMETRY_DISABLED: "1" };
@@ -189,18 +215,25 @@ export function startNext(backendUrl: string | undefined): Promise<ChildServer> 
   );
 }
 
-/** The real FastAPI backend from ../backend/.venv (requires `uv sync --locked` there). */
-export function startBackend(): Promise<ChildServer> {
-  const backendDir = path.resolve(FRONTEND_DIR, "../backend");
-  const python =
+export const BACKEND_DIR = path.resolve(FRONTEND_DIR, "../backend");
+
+/** The backend's interpreter: ../backend/.venv (requires `uv sync --locked` there). */
+export function backendPython(): string {
+  return (
     process.env.BLUEPRINTIQ_BACKEND_PYTHON ??
     path.join(
-      backendDir,
+      BACKEND_DIR,
       ".venv",
       process.platform === "win32" ? "Scripts/python.exe" : "bin/python",
-    );
+    )
+  );
+}
+
+/** The real FastAPI backend from ../backend/.venv. */
+export function startBackend(): Promise<ChildServer> {
+  const backendDir = BACKEND_DIR;
   return startProcess(
-    python,
+    backendPython(),
     (port) => [
       "-m",
       "uvicorn",

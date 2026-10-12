@@ -19,7 +19,22 @@ export default defineConfig({
         extends: true,
         test: {
           name: "unit",
-          include: ["src/**/*.test.ts", "tests/proxy/handler.test.ts", "tests/proxy/guards.test.ts"],
+          include: [
+            "src/**/*.test.ts",
+            "tests/proxy/handler.test.ts",
+            "tests/proxy/guards.test.ts",
+            "tests/proxy/launch-scripts.test.ts",
+          ],
+        },
+      },
+      {
+        // Component and hook tests, in a simulated browser (jsdom).
+        extends: true,
+        test: {
+          name: "ui",
+          environment: "jsdom",
+          include: ["src/**/*.test.tsx"],
+          setupFiles: ["tests/setup-ui.ts"],
         },
       },
       {
@@ -27,7 +42,7 @@ export default defineConfig({
         extends: true,
         test: {
           name: "server",
-          include: ["tests/proxy/next-server.test.ts"],
+          include: ["tests/proxy/next-server.test.ts", "tests/proxy/launch-binding.test.ts"],
           testTimeout: 30_000,
           hookTimeout: 60_000,
         },
@@ -37,7 +52,7 @@ export default defineConfig({
         extends: true,
         test: {
           name: "backend",
-          include: ["tests/proxy/backend.test.ts"],
+          include: ["tests/proxy/backend.test.ts", "tests/ui/real-responses.test.tsx"],
           testTimeout: 180_000,
           hookTimeout: 90_000,
         },
