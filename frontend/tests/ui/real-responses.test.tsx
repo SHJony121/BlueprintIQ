@@ -29,6 +29,7 @@ import {
   unusedPort,
   type ChildServer,
 } from "../proxy/helpers";
+import { idleSource } from "./fake-pdf";
 
 afterEach(() => cleanup());
 
@@ -196,7 +197,8 @@ function pdfFile(name: string, bytes: Uint8Array = new Uint8Array(drawing(name))
 
 async function useDashboard(port: number, file: File) {
   const user = userEvent.setup({ applyAccept: false });
-  render(<InspectionDashboard run={realRun(port)} />);
+  // The viewer is not under test here (jsdom has no canvas); its PDF engine never opens.
+  render(<InspectionDashboard run={realRun(port)} pdfSource={idleSource} />);
   await user.upload(screen.getByLabelText(/drop a pdf drawing/i), file);
 }
 

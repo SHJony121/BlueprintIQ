@@ -165,6 +165,8 @@ export function allOutcomesReport(): InspectionReport {
         severity: "warning",
         rule_description: "Overall length must be between 10 mm and 500 mm.",
         measurement_ids: ["M2"],
+        // Evidence is a copy of the measurement's source, which has no location here.
+        evidence: [{ measurement_id: "M2", page_number: 1, bbox: null }],
         expected: "between 10 mm and 500 mm (inclusive)",
         actual: "LENGTH: 12 M",
         message: "The unit is ambiguous, so the length cannot be judged.",

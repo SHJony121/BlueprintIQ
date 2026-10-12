@@ -14,13 +14,13 @@ export type InspectionState =
   | { status: "idle" }
   | { status: "rejected"; fileName: string; sizeBytes: number | null; problem: FileProblem }
   | { status: "running"; file: File }
-  | { status: "succeeded"; fileName: string; report: InspectionReport; requestId: string | null }
+  | { status: "succeeded"; file: File; fileName: string; report: InspectionReport; requestId: string | null }
   | { status: "failed"; file: File; failure: Failure };
 
 export type InspectionAction =
   | { type: "rejected"; fileName: string; sizeBytes: number | null; problem: FileProblem }
   | { type: "started"; file: File }
-  | { type: "succeeded"; fileName: string; report: InspectionReport; requestId: string | null }
+  | { type: "succeeded"; file: File; report: InspectionReport; requestId: string | null }
   | { type: "failed"; file: File; failure: Failure }
   | { type: "cleared" };
 
@@ -40,7 +40,8 @@ export function inspectionReducer(_: InspectionState, action: InspectionAction):
     case "succeeded":
       return {
         status: "succeeded",
-        fileName: action.fileName,
+        file: action.file,
+        fileName: action.file.name,
         report: action.report,
         requestId: action.requestId,
       };

@@ -83,7 +83,7 @@ function toAction(file: File, result: InspectionResult): InspectionAction | null
     case "report":
       return {
         type: "succeeded",
-        fileName: file.name,
+        file,
         report: result.report,
         requestId: result.requestId,
       };

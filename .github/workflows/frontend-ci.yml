@@ -90,3 +90,51 @@ jobs:
       - name: Proxy and screen tests against the real backend
         working-directory: frontend
         run: npm run test:backend
+
+  browser:
+    # The drawing viewer in real Chromium (Playwright) against the production build and the
+    # real backend: overlay alignment measured from rendered pixels at three pixel ratios.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.13.0"
+          enable-cache: true
+          cache-dependency-glob: backend/uv.lock
+
+      - name: Install backend dependencies (locked)
+        working-directory: backend
+        run: uv sync --locked
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies (locked)
+        working-directory: frontend
+        run: npm ci
+
+      - name: Install Chromium for Playwright
+        working-directory: frontend
+        run: npx playwright install --with-deps chromium
+
+      - name: Build
+        working-directory: frontend
+        run: npm run build
+
+      - name: Viewer alignment and behaviour in the browser
+        working-directory: frontend
+        run: npm run test:e2e
+
+      - name: Keep the alignment measurements
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: alignment-measurements
+          path: frontend/test-results/alignment/
+          if-no-files-found: ignore

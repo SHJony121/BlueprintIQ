@@ -134,7 +134,7 @@ Full list: [docs/testing-and-evaluation.md](docs/testing-and-evaluation.md#limit
 ## Roadmap
 
 1. **Phase 1.5 (hardening):** benchmark on real, permissioned CAD PDFs; warm worker pool; disconnect cancellation; clip-scope handling; licence decision.
-2. **Phase 2 (frontend):** Next.js + PDF.js viewer with evidence overlays (page-space → PDF user space mapping is documented in spec §15.1), findings panel, report export. In progress on `feat/phase2a-frontend`: the scaffold, the backend proxy and the upload and results dashboard are done ([F0](docs/frontend-f0.md), [F1](docs/frontend-f1.md), [F2](docs/frontend-f2.md)); the drawing viewer and evidence overlays are not.
+2. **Phase 2 (frontend):** Next.js + PDF.js viewer with evidence overlays (page-space → PDF user space mapping is documented in spec §15.1), findings panel, report export. In progress on `feat/phase2a-frontend`: the scaffold, the backend proxy, the upload and results dashboard, and the PDF.js viewer with evidence overlays are done ([F0](docs/frontend-f0.md), [F1](docs/frontend-f1.md), [F2](docs/frontend-f2.md), [F3](docs/frontend-f3.md)); interactive linking between findings and boxes (F4) is not.
 3. **Phase 3 (assistive AI, optional):** vision-language interpretation for scanned/unlabeled drawings behind the same evidence and uncertainty rules; human review workflow.
 
 ## Repository layout

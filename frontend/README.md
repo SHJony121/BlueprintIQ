@@ -1,6 +1,6 @@
 # BlueprintIQ frontend (Phase 2A)
 
-Local Next.js + TypeScript + Tailwind interface for the BlueprintIQ backend. Done so far: **F0** (scaffold, PDF.js worker check), **F1** (server-side proxy `POST /api/inspections`) and **F2** (upload and inspection dashboard). The drawing viewer and evidence overlay are later milestones. See [F0](../docs/frontend-f0.md), [F1](../docs/frontend-f1.md) and [F2](../docs/frontend-f2.md).
+Local Next.js + TypeScript + Tailwind interface for the BlueprintIQ backend. Done so far: **F0** (scaffold, PDF.js worker check), **F1** (server-side proxy `POST /api/inspections`), **F2** (upload and inspection dashboard) and **F3** (PDF.js rendering with evidence overlays). Linking findings to boxes interactively is F4. See [F0](../docs/frontend-f0.md), [F1](../docs/frontend-f1.md), [F2](../docs/frontend-f2.md) and [F3](../docs/frontend-f3.md).
 
 ```bash
 npm ci
@@ -9,6 +9,7 @@ npm run check         # lint + typecheck + generated-types check + build + unit 
 npm run api:types     # regenerate src/api/schema.d.ts from ../backend/openapi.json
 npm run test:server   # proxy tests against `next start` (after a build)
 npm run test:backend  # proxy and screen tests against the real backend (after a build; needs `uv sync --locked` in ../backend)
+npm run test:e2e      # viewer alignment in real Chromium via Playwright (after a build; needs the backend environment)
 ```
 
 Always start the app with `npm run dev` / `npm run start`. Running `next start` directly binds all network interfaces (Next's default), which would expose the backend through the proxy.

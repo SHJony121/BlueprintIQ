@@ -5,7 +5,24 @@ import http from "node:http";
 import net from "node:net";
 import path from "node:path";
 
-export const FRONTEND_DIR = path.resolve(import.meta.dirname, "../..");
+/**
+ * The frontend directory: the nearest ancestor of the working directory whose package.json
+ * is this app's. Found this way (not from import.meta) so the helpers also load in
+ * Playwright, which runs these files as CommonJS.
+ */
+export const FRONTEND_DIR = findFrontendDir(process.cwd());
+
+function findFrontendDir(start: string): string {
+  for (let dir = path.resolve(start); ; dir = path.dirname(dir)) {
+    try {
+      const pkg = JSON.parse(readFileSync(path.join(dir, "package.json"), "utf8")) as { name?: string };
+      if (pkg.name === "blueprintiq-frontend") return dir;
+    } catch {
+      // no package.json here
+    }
+    if (path.dirname(dir) === dir) throw new Error(`run from inside frontend/ (started in ${start})`);
+  }
+}
 export const DRAWINGS_DIR = path.resolve(FRONTEND_DIR, "../backend/tests/fixtures/drawings");
 export const MIB = 1024 * 1024;
 

@@ -24,6 +24,7 @@ import {
   source,
 } from "../../tests/ui/builders";
 import { controlledRun } from "../../tests/ui/controlled-run";
+import { idleSource } from "../../tests/ui/fake-pdf";
 import { InspectionDashboard } from "./inspection-dashboard";
 import { SiteHeader } from "./site-header";
 
@@ -38,7 +39,7 @@ const FINDINGS_HEADING = /^Findings \(\d+\)/;
 
 function open() {
   const control = controlledRun();
-  render(<InspectionDashboard run={control.run} />);
+  render(<InspectionDashboard run={control.run} pdfSource={idleSource} />);
   return control;
 }
 
@@ -591,7 +592,7 @@ describe("drag and drop", () => {
   });
 
   it("removes its page-level listeners when the screen goes away", () => {
-    const { unmount } = render(<InspectionDashboard run={controlledRun().run} />);
+    const { unmount } = render(<InspectionDashboard run={controlledRun().run} pdfSource={idleSource} />);
     unmount();
     expect(fireEvent.drop(document.body, dropData(pdf()))).toBe(true);
   });
