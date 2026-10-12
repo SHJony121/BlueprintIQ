@@ -54,6 +54,7 @@ _MAX_FILENAME = 255
 _ERRORS: dict[int | str, dict[str, Any]] = {
     status: {"model": ErrorResponse, "description": text}
     for status, text in [
+        (400, "Upload interrupted by the client (CLIENT_DISCONNECTED)"),
         (408, "Upload not received in time (UPLOAD_TIMEOUT)"),
         (413, "Upload larger than the limit (FILE_TOO_LARGE)"),
         (415, "Not sent as application/pdf (UNSUPPORTED_CONTENT_TYPE), or not a PDF "

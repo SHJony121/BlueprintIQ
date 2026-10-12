@@ -30,6 +30,7 @@ def test_unexpected_exception_is_reported_with_detail_for_logs_only() -> None:
     result = run_job(jobs.fail_with_secret, (), timeout_s=30, memory_limit_mb=None)
     assert result.kind == "error"
     assert result.detail is not None and "RuntimeError" in result.detail
+    assert "secret detail" not in result.detail and "someone" not in result.detail
     assert result.message is None  # nothing user-facing carries the detail
 
 

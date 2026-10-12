@@ -102,7 +102,7 @@ def test_openapi_documents_the_pdf_body_and_errors(api: TestClient) -> None:
     spec = api.get("/openapi.json").json()
     operation = spec["paths"][URL]["post"]
     assert "application/pdf" in operation["requestBody"]["content"]
-    assert {"200", "413", "415", "422", "500", "503"} <= set(operation["responses"])
+    assert {"200", "400", "408", "413", "415", "422", "500", "503"} <= set(operation["responses"])
 
 
 # ------------------------------------------------------------ upload safety
@@ -225,7 +225,9 @@ def test_unexpected_worker_error_is_logged_not_leaked(caplog: pytest.LogCaptureF
         logger.removeHandler(caplog.handler)
     assert error["message"] == "An unexpected error occurred."
     logged = [r for r in caplog.records if getattr(r, "event", None) == "inspection"]
-    assert any("secret detail" in str(getattr(r, "detail", "")) for r in caplog.records)
+    details = " ".join(str(getattr(r, "detail", "")) for r in caplog.records)
+    assert "RuntimeError" in details  # the type and location are logged
+    assert "secret detail" not in details and "someone" not in details  # never its text
     assert logged and all(getattr(r, "request_id", None) == error["request_id"] for r in logged)
 
 
@@ -410,3 +412,14 @@ def test_json_log_records_the_exception_type_only() -> None:
     entry = json.loads(JsonFormatter().format(record))
     assert entry["exc_type"] == "ValueError"
     assert "DRAWING-SECRET" not in json.dumps(entry)
+
+
+def test_default_ruleset_ships_inside_the_package_and_the_app_starts_unconfigured() -> None:
+    import blueprintiq
+    from blueprintiq.api.settings import DEFAULT_RULESET
+
+    package_dir = Path(blueprintiq.__file__).resolve().parent
+    assert DEFAULT_RULESET.exists()
+    assert package_dir in DEFAULT_RULESET.parents  # not a path into the source checkout
+    default_app = TestClient(create_app(Settings()))  # no ruleset configured
+    assert default_app.get("/healthz").status_code == 200

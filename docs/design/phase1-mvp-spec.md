@@ -122,7 +122,7 @@ BlueprintIQ/
 ├── backend/
 │   ├── pyproject.toml                    # deps + ruff/mypy/pytest config
 │   ├── uv.lock                           # reproducible environment
-│   ├── rules/demo_rules.toml             # demonstration thresholds (not standards)
+│   ├── src/blueprintiq/rules/demo_rules.toml  # demonstration thresholds (not standards); ships in the package
 │   ├── scripts/generate_fixtures.py      # builds synthetic PDFs + ground truth
 │   ├── src/blueprintiq/
 │   │   ├── __init__.py
@@ -278,7 +278,7 @@ OpenAPI docs are auto-generated at `/docs`.
 
 ## 7. Rule format
 
-`backend/rules/demo_rules.toml`:
+`backend/src/blueprintiq/rules/demo_rules.toml` (moved into the package in M6 so an installed wheel can start):
 
 ```toml
 [ruleset]
@@ -551,7 +551,7 @@ Implemented in `ingestion/` (layer A), `extraction/text_layer.py` (layer B), `ex
 - Text is read twice: with PyMuPDF's default clipping (what a viewer shows) and with clipping disabled (`clip=INFINITE_RECT`, no `TEXT_MEDIABOX_CLIP`). Characters in invisible render modes (`3 Tr`, `7 Tr`, fill alpha 0) or below 1 pt count as not visible. Per line: all characters visible → kept; none visible → dropped and counted (`hidden_text_lines`); some visible → document refused (`PARTIALLY_VISIBLE_TEXT`), because the visible part of `THICKNESS: 4 mm` could read `THICKNESS: 4 m`. A kept line whose box extends more than 1 pt beyond the page is refused the same way.
 - Clip paths: MuPDF counts a glyph as visible when it merely touches a clip's bounding box. So a glyph overlapping a rectangular clip must lie inside it — within 0.5 pt along the writing direction (cutting the end of a glyph changes the text) and 0.35 em across it (engine boxes include the font ascender, which has no ink). A clip is rectangular when its vertices are exactly the four corners of its bounding box (`re`, or `m l l l` with or without `h`). Any glyph overlapping a non-rectangular clip is refused (its exact coverage is not computed). Conservative: every clip on the page is considered, whatever its scope. PyMuPDF also reports the CropBox as a page-level clip, which gives the crop-edge check a second, independent layer.
 - `/ActualText` replacements are ignored (`TEXT_IGNORE_ACTUALTEXT`): the evidence is the glyphs actually drawn, not a substitute string.
-- PyMuPDF (1.28.2) breaks a baseline into separate lines at about 0.9 em, which can cut a value from its unit (`THICKNESS: 4 m` + `m` would parse as 4 **metres**) or a grade from its number (`MATERIAL: AISI` + `304`). So text on one baseline (same direction, baseline within 0.1 pt) is **joined across the engine's line breaks**, with a space glyph spanning each gap, and split only at empty gaps ≥ **2 em** (`GAP_SPLIT_EM`). Gaps below 2 em read as a space: `AISI 304` is read whole, and `4 m m` is ambiguous. Real space characters never split a line.
+- PyMuPDF (1.28.2) breaks a baseline into separate lines at about 0.9 em, which can cut a value from its unit (`THICKNESS: 4 m` + `m` would parse as 4 **metres**) or a grade from its number (`MATERIAL: AISI` + `304`). So text on one baseline (same direction, baseline within 0.1 pt) is **joined across the engine's line breaks**, with a space glyph spanning each gap, and split only at empty gaps ≥ **2 em** (`GAP_SPLIT_EM`). Gaps below 2 em read as a space: `AISI 304` is read whole, and `4 m m` is ambiguous. Real space characters never split a line, except that a single whitespace glyph at least 2 em wide counts as a gap.
 - A glyph drawn twice at the same position (e.g. fill + clip render modes `4 Tr`–`6 Tr`) counts once.
 - Annotations closer than that are indistinguishable from word spacing and are read as one line. The parser then flags **every** supported `LABEL:` on that line as ambiguous (`unsupported_syntax`), including when the line starts with an unsupported label (`SCALE: 1:2 MATERIAL: SS400`, `NOTE: THICKNESS: 2 mm` — the leading label is still reported as unrecognized). None disappears and none is guessed. This supersedes the M2 rule in §14 that kept `NOTE: THICKNESS: …` as an unrecognized label only.
 - Lines are ordered top-to-bottom, left-to-right **in viewer space**.
@@ -595,7 +595,7 @@ Box check: the extracted box must contain the AFM ink box (0.5 pt) and exceed it
 - The clip rule is conservative: a clip whose scope has already ended (`q … W n … Q`) still counts, so CAD sheets with viewport or hatch clips near annotations may be refused. Scoping clips correctly needs matching drawing and text sequence numbers; deferred until real CAD samples are available.
 - A missing font resource is substituted silently by MuPDF; the text is right but its box width can be a few points off.
 - A line that does not start with a label but contains one (`2X DIAMETER: 10 mm`, `(MIN) THICKNESS: 5 mm`) is flagged ambiguous: the parser cannot tell a measurement from a specification limit there, so it asks for review rather than dropping or trusting it.
-- Annotations closer than 1 em on one baseline become ambiguous rather than separated.
+- Annotations closer than 2 em on one baseline are read as one line and become ambiguous rather than separated.
 - Text at non-orthogonal angles rejects the whole drawing.
 - A material followed on the same baseline by unrelated text within about 0.9 em is read together with it and becomes ambiguous (safe, but noisy).
 
@@ -607,7 +607,7 @@ Implemented in `rules/config.py`, `rules/engine.py` and `inspection.py`. Superse
 
 ### 16.1 Configuration
 
-One TOML file, read with `tomllib.loads(text, parse_float=Decimal)` and validated completely before any drawing is processed. Shipped files: `backend/rules/demo_rules.toml` (demonstration values) and `backend/tests/fixtures/rules/test_rules.toml` (same rules; tests depend only on this one).
+One TOML file, read with `tomllib.loads(text, parse_float=Decimal)` and validated completely before any drawing is processed. Shipped files: `backend/src/blueprintiq/rules/demo_rules.toml` (demonstration values) and `backend/tests/fixtures/rules/test_rules.toml` (same rules; tests depend only on this one).
 
 Rejected, with one message per problem naming the rule id and field: invalid TOML; missing `[ruleset]` header or empty `rules`; unknown keys anywhere (including `min_cm`, `unit` — thresholds are always `min_mm` / `max_mm`); unknown `kind`, `applies_to` or `severity`; malformed or duplicate rule ids; blank descriptions; thresholds that are not plain numbers (booleans, strings such as `"3.0"`, dates), negative, NaN, infinite, or longer than 30 digits; `range` with no bound, with `min_mm > max_mm`, or on `material`; bounds on a `required` rule. `min_mm == max_mm` (an exact value) is allowed.
 
@@ -675,7 +675,7 @@ Interactive docs: `/docs`, schema: `/openapi.json`.
 
 ### 17.2 Errors
 
-Every non-2xx response: `{"error": {"code", "message", "request_id"}}`, with the same id in the `X-Request-ID` header and the server log. Codes: `CLIENT_DISCONNECTED` (400), `UPLOAD_TIMEOUT` (408), `UNSUPPORTED_CONTENT_TYPE` (415), `UNSUPPORTED_FILE_TYPE` (415), `FILE_TOO_LARGE` (413), every M3 rejection code (422), `PROCESSING_TIMEOUT`, `RESOURCE_LIMIT_EXCEEDED`, `PROCESSING_FAILED` (422), `REQUEST_VALIDATION_ERROR` (422), `NOT_FOUND`, `METHOD_NOT_ALLOWED`, `SERVER_BUSY` (503), `INTERNAL_ERROR` (500, generic message; the traceback is logged server-side only). Request ids are generated by the server, never taken from the client.
+Every non-2xx response: `{"error": {"code", "message", "request_id"}}`, with the same id in the `X-Request-ID` header and the server log. Codes: `CLIENT_DISCONNECTED` (400), `UPLOAD_TIMEOUT` (408), `UNSUPPORTED_CONTENT_TYPE` (415), `UNSUPPORTED_FILE_TYPE` (415), `FILE_TOO_LARGE` (413), every M3 rejection code (422), `PROCESSING_TIMEOUT`, `RESOURCE_LIMIT_EXCEEDED`, `PROCESSING_FAILED` (422), `REQUEST_VALIDATION_ERROR` (422), `NOT_FOUND`, `METHOD_NOT_ALLOWED`, `SERVER_BUSY` (503), `INTERNAL_ERROR` (500, generic message; details are logged server-side only (exception type and code location; never the exception text)). Request ids are generated by the server, never taken from the client.
 
 ### 17.3 Isolation of untrusted PDF work
 
@@ -692,7 +692,7 @@ Cost: a fresh interpreter per request — measured at about 1.2 s per inspection
 
 ### 17.4 Configuration and logging
 
-`Settings` (pydantic-settings, prefix `BLUEPRINTIQ_`): `RULESET_PATH`, `MAX_UPLOAD_BYTES`, `JOB_TIMEOUT_S`, `JOB_MEMORY_LIMIT_MB`, `MAX_CONCURRENT_JOBS`, `QUEUE_TIMEOUT_S`, `LOG_LEVEL`. `create_app(settings)` loads and validates the ruleset; an invalid or missing file raises `RulesetConfigError` and the server does not start. Logs are JSON lines: request id, status, duration, upload size, SHA-256 prefix, outcome counts — never drawing text, file names or upload bytes.
+`Settings` (pydantic-settings, prefix `BLUEPRINTIQ_`): `RULESET_PATH`, `MAX_UPLOAD_BYTES`, `JOB_TIMEOUT_S`, `JOB_MEMORY_LIMIT_MB`, `MAX_CONCURRENT_JOBS`, `MAX_ADMITTED_REQUESTS`, `QUEUE_TIMEOUT_S`, `UPLOAD_TIMEOUT_S`, `LOG_LEVEL`. `create_app(settings)` loads and validates the ruleset; an invalid or missing file raises `RulesetConfigError` and the server does not start. Logs are JSON lines: request id, status, duration, upload size, SHA-256 prefix, outcome counts — never drawing text, file names or upload bytes.
 
 ### 17.5 Limitations and release blockers
 
@@ -714,3 +714,14 @@ Cost: a fresh interpreter per request — measured at about 1.2 s per inspection
 - Malformed HTTP (e.g. `Content-Length: -1`) is answered by uvicorn itself, outside the error envelope.
 - No authentication, rate limiting, TLS or CORS; a reverse proxy should enforce connection limits and request timeouts.
 - About 1.2 s per inspection on Windows for the fresh worker process.
+
+---
+
+## 18. M6 notes (2026-10-12)
+
+- **Supersedes §12.D and §15.5 for execution:** PDF work is isolated in a spawned worker process per request (§17.3); up to `MAX_CONCURRENT_JOBS` run in parallel. The in-process lock in `extraction/reader.py` remains as a second guard.
+- **§15.7 wording:** the gap threshold is 2 em (§15.2); text closer than that is joined, not split at PyMuPDF's 0.9 em.
+- **Default ruleset moved into the package** so an installed wheel starts without configuration.
+- **Worker error logs** carry the exception type and code location only.
+- **Dependencies:** `pymupdf` pinned below 1.29; `python-multipart` removed (no multipart parsing); `anyio` declared.
+- **Deferred (found by the final review):** pin `starlette` and treat its `httpx`-transport deprecation warning in tests as an error; constrain `LOG_LEVEL` to valid names; `HEAD /healthz`; confirm on Linux with a real PDF that an out-of-memory under `RLIMIT_AS` inside MuPDF is reported as `RESOURCE_LIMIT_EXCEEDED` rather than `INVALID_PDF`, and check `RLIMIT_AS` behaviour on macOS.

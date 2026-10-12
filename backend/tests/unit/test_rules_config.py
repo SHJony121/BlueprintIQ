@@ -15,7 +15,7 @@ from blueprintiq.rules.config import (
 )
 
 BACKEND = Path(__file__).resolve().parents[2]
-DEMO = BACKEND / "rules" / "demo_rules.toml"
+DEMO = BACKEND / "src" / "blueprintiq" / "rules" / "demo_rules.toml"
 TEST_RULES = BACKEND / "tests" / "fixtures" / "rules" / "test_rules.toml"
 
 HEADER = """

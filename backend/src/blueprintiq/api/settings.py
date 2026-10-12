@@ -7,7 +7,8 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from blueprintiq.ingestion.limits import MIB
 
-DEFAULT_RULESET = Path(__file__).resolve().parents[3] / "rules" / "demo_rules.toml"
+# Ships inside the package, so an installed wheel starts without configuration.
+DEFAULT_RULESET = Path(__file__).resolve().parents[1] / "rules" / "demo_rules.toml"
 
 
 class Settings(BaseSettings):

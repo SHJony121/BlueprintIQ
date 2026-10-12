@@ -1,6 +1,6 @@
 """Ruleset configuration: one TOML file, validated in full before any drawing is read.
 
-Format (see rules/demo_rules.toml)::
+Format (see demo_rules.toml in this package)::
 
     [ruleset]
     id = "demo-plate-part"

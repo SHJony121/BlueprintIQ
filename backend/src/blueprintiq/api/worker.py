@@ -130,7 +130,7 @@ def _child(
         except MemoryError:
             outcome = {"kind": "resource_limit"}
         except Exception:  # anything else is a server-side error; detail stays in logs
-            outcome = {"kind": "error", "detail": traceback.format_exc(limit=20)}
+            outcome = {"kind": "error", "detail": _safe_detail()}
         try:
             payload = json.dumps(outcome)
         except (TypeError, ValueError):  # the job returned something JSON cannot carry
@@ -138,6 +138,16 @@ def _child(
         send.send_bytes(payload.encode("utf-8"))
     finally:
         send.close()
+
+
+def _safe_detail() -> str:
+    """Exception type and code locations only: its message may quote a drawing."""
+    exc = sys.exc_info()[1]
+    frames = traceback.extract_tb(exc.__traceback__)[-5:] if exc else []
+    where = " <- ".join(
+        f"{os.path.basename(f.filename)}:{f.lineno} {f.name}" for f in reversed(frames)
+    )
+    return f"{type(exc).__name__} at {where}"
 
 
 def _start_watchdog(timeout_s: float) -> None:

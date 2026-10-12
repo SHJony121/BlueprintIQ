@@ -1,4 +1,4 @@
-# Ruleset used by the tests. Starts identical to rules/demo_rules.toml so that
+# Ruleset used by the tests. Starts identical to src/blueprintiq/rules/demo_rules.toml so that
 # tuning the demo thresholds never changes test expectations.
 # These thresholds are DEMONSTRATION VALUES ONLY. They are not taken from any
 # industry, national, or company standard and must not be used for real parts.
