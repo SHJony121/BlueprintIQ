@@ -164,6 +164,8 @@ class TestInspectionReport:
             "findings",
             "summary",
             "skipped_angled_lines",
+            "cad_annotations",
+            "cad_unit_note",
             "processing_time_ms",
             "disclaimer",
         }

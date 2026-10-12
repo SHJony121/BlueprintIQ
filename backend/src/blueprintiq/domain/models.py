@@ -73,9 +73,18 @@ Quantity = Annotated[
 ]
 """A non-negative, finite Decimal. Python floats and JSON numbers are rejected."""
 
+SignedQuantity = Annotated[
+    Decimal,
+    BeforeValidator(_reject_float),
+    Field(allow_inf_nan=False, max_digits=30),
+    PlainSerializer(lambda v: format(v, "f"), return_type=str, when_used="json"),
+]
+"""A finite Decimal that may be negative (a tolerance deviation). Never a float."""
+
 Coordinate = Annotated[float, Field(allow_inf_nan=False)]
 NonBlankStr = Annotated[str, StringConstraints(max_length=500), AfterValidator(_non_blank)]
 MeasurementId = Annotated[str, StringConstraints(pattern=r"^M[1-9][0-9]*$")]
+CadAnnotationId = Annotated[str, StringConstraints(pattern=r"^C[1-9][0-9]*$")]
 FindingId = Annotated[str, StringConstraints(pattern=r"^F[1-9][0-9]*$")]
 RuleId = Annotated[str, StringConstraints(pattern=r"^[A-Z][A-Z0-9]*(-[A-Z0-9]+)*$", max_length=64)]
 
@@ -121,6 +130,27 @@ class ExtractionIssue(StrEnum):
     AMBIGUOUS_UNIT_CASE = "ambiguous_unit_case"  # e.g. "M" or "Mm": never guessed
     DECIMAL_COMMA = "decimal_comma"
     UNSUPPORTED_SYNTAX = "unsupported_syntax"
+
+
+class CadKind(StrEnum):
+    """What a CAD annotation looks like, from its symbol. Not what physical feature it is."""
+
+    LINEAR = "linear"  # a plain number: the feature is unknown
+    DIAMETER = "diameter"  # leading diameter symbol
+    RADIUS = "radius"  # leading R
+    ANGLE = "angle"  # degree sign
+
+
+class CadUnit(StrEnum):
+    MM = "mm"
+    DEG = "deg"
+
+
+class UnitSource(StrEnum):
+    ANNOTATION = "annotation"  # written in the annotation itself ("2.7 mm")
+    DRAWING_NOTE = "drawing_note"  # an explicit drawing-wide note, e.g. "All dimensions are in mm"
+    SYMBOL = "symbol"  # the degree sign
+    NONE = "none"  # no unit evidence: the value is kept, never converted
 
 
 class ExtractionMethod(StrEnum):
@@ -280,6 +310,47 @@ class MaterialAnnotation(_Frozen):
         return self
 
 
+class CadAnnotation(_Frozen):
+    """A conventional CAD dimension or tolerance, as written. Extraction only.
+
+    It is never attached to a physical feature (``association`` is always ``none``),
+    is never a ``Measurement`` and is never evaluated by a rule. ``upper_deviation`` and
+    ``lower_deviation`` are signed: ``2.7 ±0.1`` is +0.1 and -0.1; ``3.7 +0/-0.2`` is 0
+    and -0.2. A tolerance that is not on the same line as its value is not joined to it.
+    """
+
+    id: CadAnnotationId
+    association: Literal["none"] = "none"
+    dimension_kind: CadKind | None
+    nominal: Quantity | None
+    upper_deviation: SignedQuantity | None = None
+    lower_deviation: SignedQuantity | None = None
+    unit: CadUnit | None = None
+    unit_source: UnitSource = UnitSource.NONE
+    status: ExtractionStatus
+    issues: tuple[ExtractionIssue, ...] = ()
+    source: SourceEvidence
+
+    @model_validator(mode="after")
+    def _consistent(self) -> Self:
+        _check_status_and_issues(self.status, self.issues, "CAD annotation")
+        if (self.upper_deviation is None) != (self.lower_deviation is None):
+            raise ValueError("a tolerance needs both an upper and a lower deviation")
+        if (
+            self.upper_deviation is not None
+            and self.lower_deviation is not None
+            and (self.upper_deviation < 0 or self.lower_deviation > 0)
+        ):
+            raise ValueError("upper deviation must be >= 0 and lower deviation <= 0")
+        if (self.unit is None) != (self.unit_source is UnitSource.NONE):
+            raise ValueError("a unit needs a source, and no unit has none")
+        if self.status is ExtractionStatus.PARSED and (
+            self.dimension_kind is None or self.nominal is None or self.unit is None
+        ):
+            raise ValueError("a parsed CAD annotation needs a kind, a nominal value and a unit")
+        return self
+
+
 Measurement = Annotated[DimensionMeasurement | MaterialAnnotation, Field(discriminator="kind")]
 
 
@@ -396,15 +467,26 @@ def _check_unique_measurement_ids(measurements: Iterable[Measurement]) -> None:
         raise ValueError("duplicate measurement ids")
 
 
+def _check_unique_cad_ids(annotations: Iterable[CadAnnotation]) -> None:
+    ids = [a.id for a in annotations]
+    if len(set(ids)) != len(ids):
+        raise ValueError("duplicate CAD annotation ids")
+
+
 def _check_evidence_against_pages(
     document: DocumentInfo,
     measurements: Iterable[Measurement],
     unrecognized: Iterable[UnrecognizedAnnotation],
+    cad: Iterable[CadAnnotation] = (),
+    unit_note: SourceEvidence | None = None,
 ) -> None:
     """Every evidence page must exist and every box must lie on its page."""
     pages = {p.page_number: p for p in document.pages}
     sources = [(f"measurement {m.id}", m.source) for m in measurements]
     sources += [(f"annotation {a.label}", a.source) for a in unrecognized]
+    sources += [(f"CAD annotation {a.id}", a.source) for a in cad]
+    if unit_note is not None:
+        sources.append(("unit note", unit_note))
     for label, source in sources:
         page = pages.get(source.page_number)
         if page is None:
@@ -438,12 +520,19 @@ class DrawingExtraction(_Frozen):
     hidden_text_lines: int = Field(ge=0)
     skipped_lines: int = Field(ge=0)
     angled_text_lines: int = Field(default=0, ge=0)
+    cad_annotations: tuple[CadAnnotation, ...] = ()
+    unit_note: SourceEvidence | None = None
 
     @model_validator(mode="after")
     def _cross_checks(self) -> Self:
         _check_unique_measurement_ids(self.measurements)
+        _check_unique_cad_ids(self.cad_annotations)
         _check_evidence_against_pages(
-            self.document, self.measurements, self.unrecognized_annotations
+            self.document,
+            self.measurements,
+            self.unrecognized_annotations,
+            self.cad_annotations,
+            self.unit_note,
         )
         return self
 
@@ -459,12 +548,17 @@ class InspectionReport(_Frozen):
     # Visible lines written at an angle. They are not read, so when this is above zero
     # the extraction is incomplete and the findings must not be taken as a full check.
     skipped_angled_lines: int = Field(default=0, ge=0)
+    # Conventional CAD dimensions and tolerances, read as written and kept apart from
+    # measurements and findings: no rule sees them.
+    cad_annotations: tuple[CadAnnotation, ...] = ()
+    cad_unit_note: SourceEvidence | None = None
     processing_time_ms: float = Field(ge=0, allow_inf_nan=False)
     disclaimer: str = DISCLAIMER
 
     @model_validator(mode="after")
     def _cross_checks(self) -> Self:
         self._check_unique_ids()
+        _check_unique_cad_ids(self.cad_annotations)
         self._check_evidence_against_pages()
         self._check_findings_against_measurements()
         if self.summary != FindingSummary.from_findings(self.findings):
@@ -479,7 +573,11 @@ class InspectionReport(_Frozen):
 
     def _check_evidence_against_pages(self) -> None:
         _check_evidence_against_pages(
-            self.document, self.measurements, self.unrecognized_annotations
+            self.document,
+            self.measurements,
+            self.unrecognized_annotations,
+            self.cad_annotations,
+            self.cad_unit_note,
         )
 
     def _check_findings_against_measurements(self) -> None:

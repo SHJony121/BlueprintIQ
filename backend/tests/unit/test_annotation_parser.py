@@ -842,3 +842,25 @@ def test_supported_label_on_a_line_without_a_leading_label_is_flagged(
     assert m.dimension_type is dim_type
     assert m.status is ExtractionStatus.AMBIGUOUS
     assert m.issues == (ExtractionIssue.UNSUPPORTED_SYNTAX,)
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Material: POM C noir",
+        "Matière: POM C noir",
+        "MATIERE: POM C noir",
+        "Matière / Material: POM C noir",
+        "Material / Matière : POM C noir",
+    ],
+)
+def test_english_and_french_material_labels_on_the_same_line_are_read(text: str) -> None:
+    (m,) = parse_one(text).measurements
+    assert m.kind == "material" and m.value == "POM C NOIR"
+    assert m.status.value == "parsed"
+    assert m.source.raw_text == text  # the evidence keeps what was printed
+
+
+@pytest.mark.parametrize("text", ["Matière", "Matière POM C noir", "Matériau: POM", "Material /"])
+def test_a_material_label_without_its_value_on_the_line_reads_nothing(text: str) -> None:
+    assert parse_one(text).measurements == ()

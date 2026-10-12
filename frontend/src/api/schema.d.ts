@@ -57,6 +57,53 @@ export interface components {
             y1: number;
         };
         /**
+         * CadAnnotation
+         * @description A conventional CAD dimension or tolerance, as written. Extraction only.
+         *
+         *     It is never attached to a physical feature (``association`` is always ``none``),
+         *     is never a ``Measurement`` and is never evaluated by a rule. ``upper_deviation`` and
+         *     ``lower_deviation`` are signed: ``2.7 ±0.1`` is +0.1 and -0.1; ``3.7 +0/-0.2`` is 0
+         *     and -0.2. A tolerance that is not on the same line as its value is not joined to it.
+         */
+        CadAnnotation: {
+            /**
+             * Association
+             * @default none
+             * @constant
+             */
+            association: "none";
+            dimension_kind: components["schemas"]["CadKind"] | null;
+            /** Id */
+            id: string;
+            /**
+             * Issues
+             * @default []
+             */
+            issues: components["schemas"]["ExtractionIssue"][];
+            /** Lower Deviation */
+            lower_deviation?: string | null;
+            /** Nominal */
+            nominal: string | null;
+            source: components["schemas"]["SourceEvidence"];
+            status: components["schemas"]["ExtractionStatus"];
+            unit?: components["schemas"]["CadUnit"] | null;
+            /** @default none */
+            unit_source: components["schemas"]["UnitSource"];
+            /** Upper Deviation */
+            upper_deviation?: string | null;
+        };
+        /**
+         * CadKind
+         * @description What a CAD annotation looks like, from its symbol. Not what physical feature it is.
+         * @enum {string}
+         */
+        CadKind: "linear" | "diameter" | "radius" | "angle";
+        /**
+         * CadUnit
+         * @enum {string}
+         */
+        CadUnit: "mm" | "deg";
+        /**
          * DimensionMeasurement
          * @description A numeric length annotation, e.g. ``THICKNESS: 4 mm``.
          */
@@ -187,6 +234,12 @@ export interface components {
         /** InspectionReport */
         InspectionReport: {
             /**
+             * Cad Annotations
+             * @default []
+             */
+            cad_annotations: components["schemas"]["CadAnnotation"][];
+            cad_unit_note?: components["schemas"]["SourceEvidence"] | null;
+            /**
              * Disclaimer
              * @default BlueprintIQ is an assistive engineering prototype, not certified compliance software. Findings do not guarantee engineering safety, regulatory compliance, or manufacturing correctness and must be reviewed by a qualified person.
              */
@@ -300,6 +353,11 @@ export interface components {
             raw_text: string;
         };
         /**
+         * UnitSource
+         * @enum {string}
+         */
+        UnitSource: "annotation" | "drawing_note" | "symbol" | "none";
+        /**
          * UnrecognizedAnnotation
          * @description A labeled line whose label Phase 1 does not support. Reported, never evaluated.
          */
@@ -316,6 +374,9 @@ export interface components {
     pathItems: never;
 }
 export type SchemaBBox = components['schemas']['BBox'];
+export type SchemaCadAnnotation = components['schemas']['CadAnnotation'];
+export type SchemaCadKind = components['schemas']['CadKind'];
+export type SchemaCadUnit = components['schemas']['CadUnit'];
 export type SchemaDimensionMeasurement = components['schemas']['DimensionMeasurement'];
 export type SchemaDimensionType = components['schemas']['DimensionType'];
 export type SchemaDocumentInfo = components['schemas']['DocumentInfo'];
@@ -335,6 +396,7 @@ export type SchemaPageInfo = components['schemas']['PageInfo'];
 export type SchemaRulesetInfo = components['schemas']['RulesetInfo'];
 export type SchemaSeverity = components['schemas']['Severity'];
 export type SchemaSourceEvidence = components['schemas']['SourceEvidence'];
+export type SchemaUnitSource = components['schemas']['UnitSource'];
 export type SchemaUnrecognizedAnnotation = components['schemas']['UnrecognizedAnnotation'];
 export type $defs = Record<string, never>;
 export interface operations {

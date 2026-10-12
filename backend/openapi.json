@@ -31,6 +31,125 @@
         "title": "BBox",
         "type": "object"
       },
+      "CadAnnotation": {
+        "additionalProperties": false,
+        "description": "A conventional CAD dimension or tolerance, as written. Extraction only.\n\nIt is never attached to a physical feature (``association`` is always ``none``),\nis never a ``Measurement`` and is never evaluated by a rule. ``upper_deviation`` and\n``lower_deviation`` are signed: ``2.7 ±0.1`` is +0.1 and -0.1; ``3.7 +0/-0.2`` is 0\nand -0.2. A tolerance that is not on the same line as its value is not joined to it.",
+        "properties": {
+          "association": {
+            "const": "none",
+            "default": "none",
+            "title": "Association",
+            "type": "string"
+          },
+          "dimension_kind": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CadKind"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "id": {
+            "pattern": "^C[1-9][0-9]*$",
+            "title": "Id",
+            "type": "string"
+          },
+          "issues": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ExtractionIssue"
+            },
+            "title": "Issues",
+            "type": "array"
+          },
+          "lower_deviation": {
+            "anyOf": [
+              {
+                "max_digits": 30,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lower Deviation"
+          },
+          "nominal": {
+            "anyOf": [
+              {
+                "max_digits": 30,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nominal"
+          },
+          "source": {
+            "$ref": "#/components/schemas/SourceEvidence"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ExtractionStatus"
+          },
+          "unit": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CadUnit"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "unit_source": {
+            "$ref": "#/components/schemas/UnitSource",
+            "default": "none"
+          },
+          "upper_deviation": {
+            "anyOf": [
+              {
+                "max_digits": 30,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Upper Deviation"
+          }
+        },
+        "required": [
+          "id",
+          "dimension_kind",
+          "nominal",
+          "status",
+          "source"
+        ],
+        "title": "CadAnnotation",
+        "type": "object"
+      },
+      "CadKind": {
+        "description": "What a CAD annotation looks like, from its symbol. Not what physical feature it is.",
+        "enum": [
+          "linear",
+          "diameter",
+          "radius",
+          "angle"
+        ],
+        "title": "CadKind",
+        "type": "string"
+      },
+      "CadUnit": {
+        "enum": [
+          "mm",
+          "deg"
+        ],
+        "title": "CadUnit",
+        "type": "string"
+      },
       "DimensionMeasurement": {
         "additionalProperties": false,
         "description": "A numeric length annotation, e.g. ``THICKNESS: 4 mm``.",
@@ -391,6 +510,24 @@
       "InspectionReport": {
         "additionalProperties": false,
         "properties": {
+          "cad_annotations": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/CadAnnotation"
+            },
+            "title": "Cad Annotations",
+            "type": "array"
+          },
+          "cad_unit_note": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SourceEvidence"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "disclaimer": {
             "default": "BlueprintIQ is an assistive engineering prototype, not certified compliance software. Findings do not guarantee engineering safety, regulatory compliance, or manufacturing correctness and must be reviewed by a qualified person.",
             "title": "Disclaimer",
@@ -657,6 +794,16 @@
         ],
         "title": "SourceEvidence",
         "type": "object"
+      },
+      "UnitSource": {
+        "enum": [
+          "annotation",
+          "drawing_note",
+          "symbol",
+          "none"
+        ],
+        "title": "UnitSource",
+        "type": "string"
       },
       "UnrecognizedAnnotation": {
         "additionalProperties": false,

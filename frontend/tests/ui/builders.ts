@@ -131,6 +131,8 @@ export function makeReport({ measurements, findings, overrides }: ReportParts = 
       missing: count("missing"),
       needs_review: count("needs_review"),
     },
+    cad_annotations: [],
+    cad_unit_note: null,
     skipped_angled_lines: 0,
     processing_time_ms: 1203.4,
     disclaimer: "BlueprintIQ is an assistive engineering prototype.",
@@ -207,3 +209,27 @@ export const DEMO_REQUIREMENTS = (() => {
   if (!parsed.ok) throw new Error("demonstration requirements are invalid");
   return parsed satisfies ParsedRequirements;
 })();
+
+export const cadAnnotation = (
+  id: string,
+  rawText: string,
+  overrides: Partial<InspectionReport["cad_annotations"][number]> = {},
+): InspectionReport["cad_annotations"][number] => ({
+  id,
+  association: "none",
+  dimension_kind: "linear",
+  nominal: "2.7",
+  upper_deviation: "0.1",
+  lower_deviation: "-0.1",
+  unit: "mm",
+  unit_source: "drawing_note",
+  status: "parsed",
+  issues: [],
+  source: {
+    page_number: 1,
+    bbox: { x0: 72, y0: 100, x1: 120, y1: 112 },
+    raw_text: rawText,
+    extraction_method: "pdf_text_layer",
+  },
+  ...overrides,
+});
