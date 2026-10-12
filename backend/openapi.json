@@ -441,6 +441,12 @@
             "title": "Schema Version",
             "type": "string"
           },
+          "skipped_angled_lines": {
+            "default": 0,
+            "minimum": 0.0,
+            "title": "Skipped Angled Lines",
+            "type": "integer"
+          },
           "summary": {
             "$ref": "#/components/schemas/FindingSummary"
           },

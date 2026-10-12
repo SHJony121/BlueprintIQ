@@ -163,6 +163,7 @@ class TestInspectionReport:
             "unrecognized_annotations",
             "findings",
             "summary",
+            "skipped_angled_lines",
             "processing_time_ms",
             "disclaimer",
         }

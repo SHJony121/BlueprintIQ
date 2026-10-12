@@ -1,6 +1,7 @@
 import type { InspectionReport } from "@/api/types";
 import { AppliedRequirements } from "./applied-requirements";
 import { DocumentPanel } from "./document-panel";
+import { IncompleteExtraction } from "./incomplete-extraction";
 import { FindingsList, type FindingLocation } from "./findings-list";
 import { MeasurementList, UnrecognizedList } from "./measurement-list";
 import { SummaryCards } from "./summary-cards";
@@ -19,6 +20,7 @@ export function ReportView({
 }) {
   return (
     <div className="flex flex-col gap-6">
+      <IncompleteExtraction skipped={report.skipped_angled_lines} />
       <AppliedRequirements report={report} />
       <SummaryCards summary={report.summary} />
       <FindingsList

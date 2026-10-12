@@ -185,7 +185,7 @@ Also `npm run lint`, `npm run typecheck`, `npm run api:check` (generated API typ
 * The PDF viewer appears only at desktop widths (1024 px and up); on narrower screens the findings still work without it.
 * Overlay alignment is measured on synthetic pages (Helvetica and Courier); misplacement smaller than about 3 pt would not be detected by the tests.
 * One F1 proxy test failed once, unexplained, and never recurred (details in [F2](docs/frontend-f2.md#known-limitations-and-notes)); no other known flaky tests. Browser tests need Chromium installed.
-* Single-page, vector/text PDFs only; no scans/OCR, DWG, multi-page, text at non-right angles, `/UserUnit` scaling.
+* Single-page, vector/text PDFs only; no scans/OCR, DWG, multi-page, `/UserUnit` scaling. Text at other than right angles is **not read**: it is skipped and the report says "Incomplete extraction" with the number of lines; if such a line carries a supported label (`THICKNESS:` and so on) the file is refused (`UNSUPPORTED_GEOMETRY`) instead.
 * English labels and the documented annotation grammar only; no `Ø`, tolerances, ranges or component association (rules apply per measurement type, not per feature).
 * Material rules check **presence**, or an exact match of the code written on the drawing; they never judge whether a material is suitable.
 * The default rules are demonstration constraints; user-set requirements are limited to the four listed in [docs/custom-requirements.md](docs/custom-requirements.md), apply per measurement type, and are not saved.

@@ -437,6 +437,7 @@ class DrawingExtraction(_Frozen):
     text_lines: int = Field(ge=0)
     hidden_text_lines: int = Field(ge=0)
     skipped_lines: int = Field(ge=0)
+    angled_text_lines: int = Field(default=0, ge=0)
 
     @model_validator(mode="after")
     def _cross_checks(self) -> Self:
@@ -455,6 +456,9 @@ class InspectionReport(_Frozen):
     unrecognized_annotations: tuple[UnrecognizedAnnotation, ...]
     findings: tuple[Finding, ...]
     summary: FindingSummary
+    # Visible lines written at an angle. They are not read, so when this is above zero
+    # the extraction is incomplete and the findings must not be taken as a full check.
+    skipped_angled_lines: int = Field(default=0, ge=0)
     processing_time_ms: float = Field(ge=0, allow_inf_nan=False)
     disclaimer: str = DISCLAIMER
 

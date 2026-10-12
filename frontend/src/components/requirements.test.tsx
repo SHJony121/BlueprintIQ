@@ -241,3 +241,23 @@ describe("which requirements a result shows", () => {
     expect(applied.textContent).toMatch(/MAT-REQ-001/);
   });
 });
+
+describe("incomplete extraction", () => {
+  it("is announced above the results when angled text was skipped", async () => {
+    const { user, calls } = open();
+    await choose(user);
+    await act(async () => calls[0]!.resolve(ok(makeReport({ overrides: { skipped_angled_lines: 2 } }))));
+    const notice = await screen.findByTestId("incomplete-extraction");
+    expect(notice.textContent).toMatch(/Incomplete extraction/);
+    expect(notice.textContent).toMatch(/2 lines of text/);
+    expect(notice.textContent).toMatch(/not a full inspection/);
+  });
+
+  it("is absent for a complete extraction", async () => {
+    const { user, calls } = open();
+    await choose(user);
+    await act(async () => calls[0]!.resolve(ok(allOutcomesReport())));
+    await screen.findByRole("heading", { name: /^Findings \(/ });
+    expect(screen.queryByTestId("incomplete-extraction")).toBeNull();
+  });
+});

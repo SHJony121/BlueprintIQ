@@ -206,6 +206,8 @@ describe("a report that breaks the contract is rejected", () => {
     ["a page_count that disagrees with the pages", (r) => (r.document.page_count = 3)],
     ["a malformed sha256", (r) => (r.document.sha256 = "xyz")],
     ["a crop box of the wrong length", (r) => (r.document.pages[0].pdf_crop_box = [0, 0, 595])],
+    ["a negative skipped angled line count", (r) => (r.skipped_angled_lines = -1)],
+    ["a missing skipped angled line count", (r) => delete r.skipped_angled_lines],
     ["a negative processing time", (r) => (r.processing_time_ms = -1)],
     ["an unknown extraction method", (r) => (r.measurements[0].source.extraction_method = "ocr")],
   ];

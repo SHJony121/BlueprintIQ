@@ -74,6 +74,9 @@ class PageText:
     page: PageInfo
     lines: tuple[TextLine, ...]  # in reading order as the page is displayed
     hidden_lines: int
+    # Visible lines written at an angle. They are never read as evidence; the caller
+    # decides whether any of them makes the document unsafe to inspect.
+    angled_lines: tuple[TextLine, ...] = ()
 
 
 def extract_page_text(
@@ -93,6 +96,7 @@ def extract_page_text(
     clips = _clips(page)
 
     hidden = 0
+    angled: list[TextLine] = []
     seen: set[tuple[str, float, float]] = set()
     rows: dict[tuple[Direction, float], list[list[PositionedChar]]] = defaultdict(list)
     for block in raw["blocks"]:
@@ -121,6 +125,16 @@ def extract_page_text(
                     "Some text is only partly visible, so the drawing cannot be read reliably."
                 )
             direction = _axis_direction(line["dir"])
+            if direction is None:
+                box = _union([ch for ch, _, _ in ink])
+                if not _on_page(box, info):
+                    raise PartiallyVisibleTextError(
+                        "Some text is cut off at the edge of the visible area, so the drawing "
+                        "cannot be read reliably."
+                    )
+                text = "".join(ch.text for ch, _, _ in chars).strip()
+                angled.append(TextLine(text=text, page_number=page_number, bbox=box))
+                continue
             origin = ink[0][2]
             baseline = origin[1] if direction[1] == 0 else origin[0]
             rows[(direction, round(baseline, 1))].append([ch for ch, _, _ in chars])
@@ -142,7 +156,7 @@ def extract_page_text(
                 )
 
     lines.sort(key=lambda tl: _reading_order(tl, info))
-    return PageText(page=info, lines=tuple(lines), hidden_lines=hidden)
+    return PageText(page=info, lines=tuple(lines), hidden_lines=hidden, angled_lines=tuple(angled))
 
 
 # ----------------------------------------------------------------- geometry
@@ -520,15 +534,14 @@ def _interval(box: Rect4, direction: Direction) -> tuple[float, float]:
     return (y0, y1) if dy > 0 else (-y1, -y0)
 
 
-def _axis_direction(raw_dir: Any) -> Direction:
+def _axis_direction(raw_dir: Any) -> Direction | None:
+    """The writing direction along an axis, or ``None`` for text at any other angle."""
     dx, dy = float(raw_dir[0]), float(raw_dir[1])
     if abs(dx) < _AXIS_TOLERANCE:
         return (0.0, 1.0 if dy > 0 else -1.0)
     if abs(dy) < _AXIS_TOLERANCE:
         return (1.0 if dx > 0 else -1.0, 0.0)
-    raise UnsupportedGeometryError(
-        "Text written at an angle other than 0, 90, 180 or 270 degrees is not supported."
-    )
+    return None
 
 
 # ------------------------------------------------------------------ helpers

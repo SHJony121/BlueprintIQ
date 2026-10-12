@@ -125,6 +125,7 @@ export function readReport(value: unknown): InspectionReport {
     ),
     findings: list(o.findings, "findings").map((f, i) => readFinding(f, `findings[${i}]`)),
     summary: readSummary(o.summary, "summary"),
+    skipped_angled_lines: count(o.skipped_angled_lines, "skipped_angled_lines"),
     processing_time_ms: finite(o.processing_time_ms, "processing_time_ms", 0),
     disclaimer: str(o.disclaimer, "disclaimer"),
   };

@@ -534,7 +534,8 @@ def all_fixtures() -> tuple[Fixture, ...]:
                  PageSpec(runs=(TextRun("THICKNESS: 4 mm", 72, 560, render_mode=3),))),
         _invalid("user_unit", "/UserUnit 2 scales the page; not supported.",
                  "UNSUPPORTED_GEOMETRY", PageSpec(runs=single, user_unit=2.0)),
-        _invalid("slanted_text", "Text at 45 degrees; line segmentation is not reliable.",
+        _invalid("slanted_text", "A THICKNESS label written at 45 degrees cannot be read, so "
+                 "the file is refused rather than reported as inspected.",
                  "UNSUPPORTED_GEOMETRY",
-                 PageSpec(runs=(*single, TextRun("NOTE: SLANTED", 300, 300, angle=45)))),
+                 PageSpec(runs=(*single, TextRun("THICKNESS: 9 mm", 300, 300, angle=45)))),
     )  # fmt: skip
