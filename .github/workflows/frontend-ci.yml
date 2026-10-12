@@ -1,0 +1,140 @@
+name: frontend-ci
+
+on:
+  push:
+    branches: [main, "feat/**"]
+    # backend/** too: the proxy tests run against the real backend and its fixtures.
+    paths: ["frontend/**", "backend/**", ".github/workflows/frontend-ci.yml"]
+  pull_request:
+    paths: ["frontend/**", "backend/**", ".github/workflows/frontend-ci.yml"]
+
+permissions:
+  contents: read
+
+env:
+  NEXT_TELEMETRY_DISABLED: "1"
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24 # pdfjs-dist requires Node >= 22.13 or >= 24
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies (locked)
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Type check
+        run: npm run typecheck
+
+      # The API types are generated from backend/openapi.json; fail if they were not regenerated.
+      - name: Generated API types are current
+        run: npm run api:check
+
+      - name: Unit, proxy handler and component tests
+        run: npm test
+
+      - name: Build
+        run: npm run build
+
+      - name: Proxy and launch-binding tests against the real Next.js server
+        run: npm run test:server
+
+      # Production dependencies only: the remaining advisories are in the ESLint plugin's
+      # dev-only glob chain (see docs/frontend-f0.md) and never ship.
+      - name: Audit production dependencies
+        run: npm audit --omit=dev --audit-level=high
+
+  proxy-backend:
+    # The production Next.js server in front of the real FastAPI backend, all fixtures.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.13.0"
+          enable-cache: true
+          cache-dependency-glob: backend/uv.lock
+
+      - name: Install backend dependencies (locked)
+        working-directory: backend
+        run: uv sync --locked
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies (locked)
+        working-directory: frontend
+        run: npm ci
+
+      - name: Build
+        working-directory: frontend
+        run: npm run build
+
+      - name: Proxy and screen tests against the real backend
+        working-directory: frontend
+        run: npm run test:backend
+
+  browser:
+    # The drawing viewer in real Chromium (Playwright) against the production build and the
+    # real backend: overlay alignment measured from rendered pixels at three pixel ratios.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.13.0"
+          enable-cache: true
+          cache-dependency-glob: backend/uv.lock
+
+      - name: Install backend dependencies (locked)
+        working-directory: backend
+        run: uv sync --locked
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies (locked)
+        working-directory: frontend
+        run: npm ci
+
+      - name: Install Chromium for Playwright
+        working-directory: frontend
+        run: npx playwright install --with-deps chromium
+
+      - name: Build
+        working-directory: frontend
+        run: npm run build
+
+      - name: Viewer alignment and behaviour in the browser
+        working-directory: frontend
+        run: npm run test:e2e
+
+      - name: Keep the alignment measurements
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: alignment-measurements
+          path: frontend/test-results/alignment/
+          if-no-files-found: ignore

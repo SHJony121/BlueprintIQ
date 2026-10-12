@@ -2,7 +2,7 @@
 
 Everything on this page was measured by tests or scripts that were actually run. Nothing is estimated. Where something has **not** been measured, it says so.
 
-## 1. Test suite (1132 tests)
+## 1. Test suite (1134 tests; the count was 1132 when this section was written and includes 2 OpenAPI snapshot tests added in Phase 2A)
 
 All pass locally (Windows) and in GitHub Actions (Linux, Python 3.13): `ruff check`, `ruff format --check`, `mypy --strict` (24 source files), `pytest`. On Windows 3 tests are skipped because they need Linux's memory limit (they run on Linux CI).
 

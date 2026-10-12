@@ -1,6 +1,6 @@
 # Security and deployment restrictions
 
-**BlueprintIQ Phase 1 is for trusted local use only. Public deployment is BLOCKED.**
+**BlueprintIQ (the Phase 1 backend and the Phase 2A local frontend) is for trusted local use only. Public deployment is BLOCKED.**
 
 ## What is implemented (and tested)
 
@@ -26,6 +26,10 @@
 | **Per-request process cost (~1.2 s on Windows)** | A warm worker pool would help but weakens per-request isolation. |
 | **Real industrial CAD PDFs not benchmarked** | Behaviour on real files is unknown. |
 | **Parser/PDF attack surface in MuPDF** | Mitigated by isolation and limits, not eliminated; keep PyMuPDF updated. |
+
+## Frontend proxy (Phase 2A, F1)
+
+The Next.js app forwards uploads to the backend through one server-side route, `POST /api/inspections`. It binds to `127.0.0.1`, refuses foreign `Host`/`Origin` headers, forwards only an allow-listed set of headers to a fixed loopback backend address, counts upload bytes against the 10 MiB limit, caps and validates backend responses, and aborts the backend request when the browser disconnects. That abort **does not cancel backend processing** (see the table above). Loopback binding comes only from the launch scripts (`npm run dev` and `npm run start`, both `--hostname 127.0.0.1`), which tests verify; the `Host` and `Origin` checks do not replace it, and public deployment stays blocked. The proxy adds **no** authentication, rate limiting or TLS and is **not** production-secure. Details: [frontend-f1.md](frontend-f1.md).
 
 ## Licensing
 

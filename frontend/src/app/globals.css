@@ -1,0 +1,99 @@
+@import "tailwindcss";
+
+/*
+ * Design tokens. One cool-neutral palette, one accent (a drafting blue), and four
+ * status colours that are only ever used for the four finding outcomes. Every text/
+ * background pair here was measured at WCAG AA (4.5:1) or better in both themes.
+ * Status is always also written as text, never colour alone.
+ *
+ * Shape rule: panels and controls use 6px corners (--radius), badges 4px. Nothing else.
+ */
+:root {
+  color-scheme: light dark;
+  --background: #f4f5f7;
+  --surface: #ffffff;
+  --line: #d4d9e0;
+  --foreground: #14181f;
+  --muted: #566170;
+  --accent: #23549f;
+  --accent-ink: #ffffff;
+  --pass: #18683f;
+  --pass-tint: #e6f3ec;
+  --fail: #a8261b;
+  --fail-tint: #fcebe9;
+  --review: #8a5200;
+  --review-tint: #fdf0d3;
+  --missing: #4a5565;
+  --missing-tint: #e9edf2;
+  --radius: 6px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #0e1116;
+    --surface: #151a21;
+    --line: #2b333d;
+    --foreground: #e6e9ee;
+    --muted: #9ba6b4;
+    --accent: #8ab4f0;
+    --accent-ink: #0e1116;
+    --pass: #6ad39b;
+    --pass-tint: #12281d;
+    --fail: #ff9a90;
+    --fail-tint: #35161a;
+    --review: #f0c15e;
+    --review-tint: #33280d;
+    --missing: #b4bfce;
+    --missing-tint: #222a35;
+  }
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-surface: var(--surface);
+  --color-line: var(--line);
+  --color-foreground: var(--foreground);
+  --color-muted: var(--muted);
+  --color-accent: var(--accent);
+  --color-accent-ink: var(--accent-ink);
+  --color-pass: var(--pass);
+  --color-pass-tint: var(--pass-tint);
+  --color-fail: var(--fail);
+  --color-fail-tint: var(--fail-tint);
+  --color-review: var(--review);
+  --color-review-tint: var(--review-tint);
+  --color-missing: var(--missing);
+  --color-missing-tint: var(--missing-tint);
+  --radius-md: var(--radius);
+  --radius-sm: 4px;
+  --font-sans: var(--font-geist-sans), system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans);
+  -webkit-tap-highlight-color: transparent;
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+button,
+label,
+a {
+  touch-action: manipulation;
+}
+
+/* Long lists: skip layout and paint for rows that are off screen. */
+.defer-render {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 9rem;
+}
+
+:target {
+  scroll-margin-top: 1rem;
+}

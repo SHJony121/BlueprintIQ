@@ -1,0 +1,47 @@
+{
+  "name": "blueprintiq-frontend",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev --hostname 127.0.0.1",
+    "build": "next build",
+    "start": "next start --hostname 127.0.0.1",
+    "lint": "eslint",
+    "typecheck": "next typegen && tsc --noEmit",
+    "api:types": "node scripts/api-types.mjs",
+    "api:check": "node scripts/api-types.mjs --check",
+    "test": "vitest run --project unit --project ui",
+    "test:server": "vitest run --project server",
+    "test:backend": "vitest run --project backend",
+    "test:e2e": "playwright test",
+    "check": "npm run lint && npm run typecheck && npm run api:check && npm run build && npm test"
+  },
+  "dependencies": {
+    "geist": "1.7.2",
+    "next": "16.4.0",
+    "pdfjs-dist": "6.4.299",
+    "react": "19.3.0",
+    "react-dom": "19.3.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.63.0",
+    "@tailwindcss/turbopack": "^4",
+    "@testing-library/dom": "10.4.2",
+    "@testing-library/react": "16.3.3",
+    "@testing-library/user-event": "14.6.7",
+    "@types/node": "^24.19.2",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "eslint": "^9",
+    "eslint-config-next": "16.4.0",
+    "jsdom": "26.1.0",
+    "openapi-typescript": "7.13.0",
+    "tailwindcss": "^4",
+    "typescript": "^5",
+    "vitest": "5.0.3"
+  },
+  "description": "BlueprintIQ local inspection interface (Phase 2A)",
+  "engines": {
+    "node": ">=22.13.0"
+  }
+}

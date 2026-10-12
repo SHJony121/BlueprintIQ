@@ -1,0 +1,806 @@
+{
+  "components": {
+    "schemas": {
+      "BBox": {
+        "additionalProperties": false,
+        "description": "Axis-aligned box in PyMuPDF page space (points, origin top-left, y down).",
+        "properties": {
+          "x0": {
+            "title": "X0",
+            "type": "number"
+          },
+          "x1": {
+            "title": "X1",
+            "type": "number"
+          },
+          "y0": {
+            "title": "Y0",
+            "type": "number"
+          },
+          "y1": {
+            "title": "Y1",
+            "type": "number"
+          }
+        },
+        "required": [
+          "x0",
+          "y0",
+          "x1",
+          "y1"
+        ],
+        "title": "BBox",
+        "type": "object"
+      },
+      "DimensionMeasurement": {
+        "additionalProperties": false,
+        "description": "A numeric length annotation, e.g. ``THICKNESS: 4 mm``.",
+        "properties": {
+          "dimension_type": {
+            "$ref": "#/components/schemas/DimensionType"
+          },
+          "id": {
+            "pattern": "^M[1-9][0-9]*$",
+            "title": "Id",
+            "type": "string"
+          },
+          "issues": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ExtractionIssue"
+            },
+            "title": "Issues",
+            "type": "array"
+          },
+          "kind": {
+            "const": "dimension",
+            "default": "dimension",
+            "title": "Kind",
+            "type": "string"
+          },
+          "normalized_value_mm": {
+            "anyOf": [
+              {
+                "max_digits": 30,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Normalized Value Mm"
+          },
+          "source": {
+            "$ref": "#/components/schemas/SourceEvidence"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ExtractionStatus"
+          },
+          "unit": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/LengthUnit"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "value": {
+            "anyOf": [
+              {
+                "max_digits": 30,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value"
+          }
+        },
+        "required": [
+          "id",
+          "dimension_type",
+          "value",
+          "unit",
+          "normalized_value_mm",
+          "status",
+          "source"
+        ],
+        "title": "DimensionMeasurement",
+        "type": "object"
+      },
+      "DimensionType": {
+        "enum": [
+          "thickness",
+          "diameter",
+          "length"
+        ],
+        "title": "DimensionType",
+        "type": "string"
+      },
+      "DocumentInfo": {
+        "additionalProperties": false,
+        "properties": {
+          "filename": {
+            "anyOf": [
+              {
+                "maxLength": 255,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Filename"
+          },
+          "page_count": {
+            "minimum": 1.0,
+            "title": "Page Count",
+            "type": "integer"
+          },
+          "pages": {
+            "items": {
+              "$ref": "#/components/schemas/PageInfo"
+            },
+            "minItems": 1,
+            "title": "Pages",
+            "type": "array"
+          },
+          "sha256": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Sha256",
+            "type": "string"
+          },
+          "size_bytes": {
+            "exclusiveMinimum": 0.0,
+            "title": "Size Bytes",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "filename",
+          "sha256",
+          "size_bytes",
+          "page_count",
+          "pages"
+        ],
+        "title": "DocumentInfo",
+        "type": "object"
+      },
+      "ErrorBody": {
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "request_id": {
+            "title": "Request Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "message",
+          "request_id"
+        ],
+        "title": "ErrorBody",
+        "type": "object"
+      },
+      "ErrorResponse": {
+        "properties": {
+          "error": {
+            "$ref": "#/components/schemas/ErrorBody"
+          }
+        },
+        "required": [
+          "error"
+        ],
+        "title": "ErrorResponse",
+        "type": "object"
+      },
+      "EvidenceRef": {
+        "additionalProperties": false,
+        "description": "Where a measurement a finding relies on was read. Copied from its source.",
+        "properties": {
+          "bbox": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BBox"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "measurement_id": {
+            "pattern": "^M[1-9][0-9]*$",
+            "title": "Measurement Id",
+            "type": "string"
+          },
+          "page_number": {
+            "minimum": 1.0,
+            "title": "Page Number",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "measurement_id",
+          "page_number",
+          "bbox"
+        ],
+        "title": "EvidenceRef",
+        "type": "object"
+      },
+      "ExtractionIssue": {
+        "enum": [
+          "missing_value",
+          "missing_unit",
+          "unsupported_unit",
+          "ambiguous_unit_case",
+          "decimal_comma",
+          "unsupported_syntax"
+        ],
+        "title": "ExtractionIssue",
+        "type": "string"
+      },
+      "ExtractionMethod": {
+        "enum": [
+          "pdf_text_layer"
+        ],
+        "title": "ExtractionMethod",
+        "type": "string"
+      },
+      "ExtractionStatus": {
+        "description": "How trustworthy an extracted annotation is. Not a rule outcome.",
+        "enum": [
+          "parsed",
+          "ambiguous"
+        ],
+        "title": "ExtractionStatus",
+        "type": "string"
+      },
+      "Finding": {
+        "additionalProperties": false,
+        "description": "The outcome of one rule for one measurement or group of measurements.",
+        "properties": {
+          "actual": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actual"
+          },
+          "evidence": {
+            "items": {
+              "$ref": "#/components/schemas/EvidenceRef"
+            },
+            "title": "Evidence",
+            "type": "array"
+          },
+          "expected": {
+            "maxLength": 500,
+            "title": "Expected",
+            "type": "string"
+          },
+          "id": {
+            "pattern": "^F[1-9][0-9]*$",
+            "title": "Id",
+            "type": "string"
+          },
+          "measurement_ids": {
+            "items": {
+              "pattern": "^M[1-9][0-9]*$",
+              "type": "string"
+            },
+            "title": "Measurement Ids",
+            "type": "array"
+          },
+          "message": {
+            "maxLength": 500,
+            "title": "Message",
+            "type": "string"
+          },
+          "rule_description": {
+            "maxLength": 500,
+            "title": "Rule Description",
+            "type": "string"
+          },
+          "rule_id": {
+            "maxLength": 64,
+            "pattern": "^[A-Z][A-Z0-9]*(-[A-Z0-9]+)*$",
+            "title": "Rule Id",
+            "type": "string"
+          },
+          "severity": {
+            "$ref": "#/components/schemas/Severity"
+          },
+          "status": {
+            "$ref": "#/components/schemas/FindingStatus"
+          }
+        },
+        "required": [
+          "id",
+          "rule_id",
+          "rule_description",
+          "status",
+          "severity",
+          "measurement_ids",
+          "evidence",
+          "expected",
+          "actual",
+          "message"
+        ],
+        "title": "Finding",
+        "type": "object"
+      },
+      "FindingStatus": {
+        "description": "The outcome of evaluating one rule. Not an extraction status.",
+        "enum": [
+          "pass",
+          "fail",
+          "missing",
+          "needs_review"
+        ],
+        "title": "FindingStatus",
+        "type": "string"
+      },
+      "FindingSummary": {
+        "additionalProperties": false,
+        "description": "Counts of each outcome, kept separate on purpose.",
+        "properties": {
+          "failed": {
+            "minimum": 0.0,
+            "title": "Failed",
+            "type": "integer"
+          },
+          "missing": {
+            "minimum": 0.0,
+            "title": "Missing",
+            "type": "integer"
+          },
+          "needs_review": {
+            "minimum": 0.0,
+            "title": "Needs Review",
+            "type": "integer"
+          },
+          "passed": {
+            "minimum": 0.0,
+            "title": "Passed",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "passed",
+          "failed",
+          "missing",
+          "needs_review"
+        ],
+        "title": "FindingSummary",
+        "type": "object"
+      },
+      "InspectionReport": {
+        "additionalProperties": false,
+        "properties": {
+          "disclaimer": {
+            "default": "BlueprintIQ is an assistive engineering prototype, not certified compliance software. Findings do not guarantee engineering safety, regulatory compliance, or manufacturing correctness and must be reviewed by a qualified person.",
+            "title": "Disclaimer",
+            "type": "string"
+          },
+          "document": {
+            "$ref": "#/components/schemas/DocumentInfo"
+          },
+          "findings": {
+            "items": {
+              "$ref": "#/components/schemas/Finding"
+            },
+            "title": "Findings",
+            "type": "array"
+          },
+          "measurements": {
+            "items": {
+              "discriminator": {
+                "mapping": {
+                  "dimension": "#/components/schemas/DimensionMeasurement",
+                  "material": "#/components/schemas/MaterialAnnotation"
+                },
+                "propertyName": "kind"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/components/schemas/DimensionMeasurement"
+                },
+                {
+                  "$ref": "#/components/schemas/MaterialAnnotation"
+                }
+              ]
+            },
+            "title": "Measurements",
+            "type": "array"
+          },
+          "processing_time_ms": {
+            "minimum": 0.0,
+            "title": "Processing Time Ms",
+            "type": "number"
+          },
+          "ruleset": {
+            "$ref": "#/components/schemas/RulesetInfo"
+          },
+          "schema_version": {
+            "const": "1.0",
+            "default": "1.0",
+            "title": "Schema Version",
+            "type": "string"
+          },
+          "summary": {
+            "$ref": "#/components/schemas/FindingSummary"
+          },
+          "unrecognized_annotations": {
+            "items": {
+              "$ref": "#/components/schemas/UnrecognizedAnnotation"
+            },
+            "title": "Unrecognized Annotations",
+            "type": "array"
+          }
+        },
+        "required": [
+          "document",
+          "ruleset",
+          "measurements",
+          "unrecognized_annotations",
+          "findings",
+          "summary",
+          "processing_time_ms"
+        ],
+        "title": "InspectionReport",
+        "type": "object"
+      },
+      "LengthUnit": {
+        "description": "Supported length units, as written on a drawing (lower case).",
+        "enum": [
+          "mm",
+          "cm",
+          "m",
+          "in"
+        ],
+        "title": "LengthUnit",
+        "type": "string"
+      },
+      "MaterialAnnotation": {
+        "additionalProperties": false,
+        "description": "A textual material specification, e.g. ``MATERIAL: SS400``. Has no number or unit.",
+        "properties": {
+          "id": {
+            "pattern": "^M[1-9][0-9]*$",
+            "title": "Id",
+            "type": "string"
+          },
+          "issues": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ExtractionIssue"
+            },
+            "title": "Issues",
+            "type": "array"
+          },
+          "kind": {
+            "const": "material",
+            "default": "material",
+            "title": "Kind",
+            "type": "string"
+          },
+          "source": {
+            "$ref": "#/components/schemas/SourceEvidence"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ExtractionStatus"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value"
+          }
+        },
+        "required": [
+          "id",
+          "value",
+          "status",
+          "source"
+        ],
+        "title": "MaterialAnnotation",
+        "type": "object"
+      },
+      "PageInfo": {
+        "additionalProperties": false,
+        "description": "Geometry of one page.\n\n``width_pt`` x ``height_pt`` is the visible area (the CropBox) of the *unrotated*\npage; every ``BBox`` on this page lies in that space, origin at its top-left.\n``rotation`` is the page's /Rotate value: how a viewer turns the page (clockwise)\nfor display. It never changes stored boxes; see ``domain.geometry`` for viewer space.\n\n``pdf_crop_box`` is the same visible area in PDF user space (origin bottom-left,\ny up), as written in the file. A PDF viewer such as PDF.js works in that space:\n``x_pdf = pdf_crop_box[0] + x`` and ``y_pdf = pdf_crop_box[3] - y``.",
+        "properties": {
+          "height_pt": {
+            "exclusiveMinimum": 0.0,
+            "title": "Height Pt",
+            "type": "number"
+          },
+          "page_number": {
+            "minimum": 1.0,
+            "title": "Page Number",
+            "type": "integer"
+          },
+          "pdf_crop_box": {
+            "maxItems": 4,
+            "minItems": 4,
+            "prefixItems": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "number"
+              }
+            ],
+            "title": "Pdf Crop Box",
+            "type": "array"
+          },
+          "rotation": {
+            "enum": [
+              0,
+              90,
+              180,
+              270
+            ],
+            "title": "Rotation",
+            "type": "integer"
+          },
+          "width_pt": {
+            "exclusiveMinimum": 0.0,
+            "title": "Width Pt",
+            "type": "number"
+          }
+        },
+        "required": [
+          "page_number",
+          "width_pt",
+          "height_pt",
+          "rotation",
+          "pdf_crop_box"
+        ],
+        "title": "PageInfo",
+        "type": "object"
+      },
+      "RulesetInfo": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "maxLength": 500,
+            "title": "Id",
+            "type": "string"
+          },
+          "version": {
+            "maxLength": 500,
+            "title": "Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "version"
+        ],
+        "title": "RulesetInfo",
+        "type": "object"
+      },
+      "Severity": {
+        "enum": [
+          "error",
+          "warning",
+          "info"
+        ],
+        "title": "Severity",
+        "type": "string"
+      },
+      "SourceEvidence": {
+        "additionalProperties": false,
+        "description": "Where an annotation came from. ``bbox`` is ``None`` when it is not known.",
+        "properties": {
+          "bbox": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BBox"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "extraction_method": {
+            "$ref": "#/components/schemas/ExtractionMethod"
+          },
+          "page_number": {
+            "minimum": 1.0,
+            "title": "Page Number",
+            "type": "integer"
+          },
+          "raw_text": {
+            "maxLength": 500,
+            "title": "Raw Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "page_number",
+          "raw_text",
+          "extraction_method"
+        ],
+        "title": "SourceEvidence",
+        "type": "object"
+      },
+      "UnrecognizedAnnotation": {
+        "additionalProperties": false,
+        "description": "A labeled line whose label Phase 1 does not support. Reported, never evaluated.",
+        "properties": {
+          "label": {
+            "maxLength": 64,
+            "title": "Label",
+            "type": "string"
+          },
+          "source": {
+            "$ref": "#/components/schemas/SourceEvidence"
+          }
+        },
+        "required": [
+          "label",
+          "source"
+        ],
+        "title": "UnrecognizedAnnotation",
+        "type": "object"
+      }
+    }
+  },
+  "info": {
+    "description": "Assistive engineering-drawing inspection prototype. Not certified compliance software; findings must be reviewed by a qualified person.",
+    "title": "BlueprintIQ",
+    "version": "0.1.0"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/api/v1/inspections": {
+      "post": {
+        "operationId": "inspect_api_v1_inspections_post",
+        "requestBody": {
+          "content": {
+            "application/pdf": {
+              "schema": {
+                "format": "binary",
+                "type": "string"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InspectionReport"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Upload interrupted by the client (CLIENT_DISCONNECTED)"
+          },
+          "408": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Upload not received in time (UPLOAD_TIMEOUT)"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Upload larger than the limit (FILE_TOO_LARGE)"
+          },
+          "415": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not sent as application/pdf (UNSUPPORTED_CONTENT_TYPE), or not a PDF (UNSUPPORTED_FILE_TYPE)"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "PDF refused or could not be processed within limits (see error.code)"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error (INTERNAL_ERROR)"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too many requests in progress (SERVER_BUSY)"
+          }
+        },
+        "summary": "Inspect one PDF drawing"
+      }
+    },
+    "/healthz": {
+      "get": {
+        "operationId": "healthz_healthz_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "title": "Response Healthz Healthz Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Liveness check"
+      }
+    }
+  }
+}
