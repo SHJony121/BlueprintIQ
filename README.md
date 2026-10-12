@@ -56,6 +56,7 @@ Open <http://127.0.0.1:3000>. The browser only talks to the Next.js app; its ser
 2. Read the summary cards (Fail, Needs review, Missing, Pass) and the findings: rule, severity, expected, actual, explanation, referenced measurements.
 3. On a wide screen (1024 px and up) the drawing appears beside the results with a box on each piece of evidence (fail solid, needs review dashed, pass dotted). Zoom, fit width, or hide the evidence and labels.
 4. Select a finding (its **Select** button or the card) to highlight its boxes and bring them into view; click or Tab to a box and press Enter to select its finding. A finding with no location is selectable and says why nothing is marked.
+5. Change the inspection requirements (minimum thickness, maximum diameter, length range, required material with an optional exact code) and press **Run inspection** or **Run again**. The starting values are demonstration values, not engineering standards. Results always state the requirements they were produced with, and are hidden if the form changes until you run again. Nothing is saved. See [docs/custom-requirements.md](docs/custom-requirements.md).
 
 Screenshots of the real running app are in [docs/screenshots/](docs/screenshots/) and embedded in [F2](docs/frontend-f2.md), [F3](docs/frontend-f3.md) and [F4](docs/frontend-f4.md).
 
@@ -128,9 +129,9 @@ flowchart LR
 | Endpoint | Purpose |
 |---|---|
 | `GET /healthz` | Liveness only; reveals no configuration. |
-| `POST /api/v1/inspections` | Body: the PDF bytes, `Content-Type: application/pdf`. Optional `X-Filename` header (percent-encoded, display only). Returns an `InspectionReport`. |
+| `POST /api/v1/inspections` | Body: the PDF bytes, `Content-Type: application/pdf`. Optional `X-Filename` header (percent-encoded, display only). Optional `X-Inspection-Requirements` header (percent-encoded JSON, at most 2048 characters; see [custom requirements](docs/custom-requirements.md)). Returns an `InspectionReport`. |
 
-Every error is `{"error": {"code", "message", "request_id"}}` with the same id in the `X-Request-ID` header. Codes: `FILE_TOO_LARGE` (413), `UNSUPPORTED_CONTENT_TYPE` / `UNSUPPORTED_FILE_TYPE` (415), `UPLOAD_TIMEOUT` (408), `SERVER_BUSY` (503), `INTERNAL_ERROR` (500), and `422` for PDFs that are refused or exceed limits (`INVALID_PDF`, `ENCRYPTED_PDF`, `TOO_MANY_PAGES`, `NO_TEXT_LAYER`, `UNSUPPORTED_GEOMETRY`, `PARTIALLY_VISIBLE_TEXT`, `PAGE_TOO_COMPLEX`, `TOO_MANY_TEXT_LINES`, `PROCESSING_TIMEOUT`, `RESOURCE_LIMIT_EXCEEDED`, `PROCESSING_FAILED`). Full contract: [spec §17](docs/design/phase1-mvp-spec.md).
+Every error is `{"error": {"code", "message", "request_id"}}` with the same id in the `X-Request-ID` header. Codes: `FILE_TOO_LARGE` (413), `UNSUPPORTED_CONTENT_TYPE` / `UNSUPPORTED_FILE_TYPE` (415), `UPLOAD_TIMEOUT` (408), `SERVER_BUSY` (503), `INTERNAL_ERROR` (500), and `422` for PDFs that are refused or exceed limits (`INVALID_PDF`, `ENCRYPTED_PDF`, `TOO_MANY_PAGES`, `NO_TEXT_LAYER`, `UNSUPPORTED_GEOMETRY`, `PARTIALLY_VISIBLE_TEXT`, `PAGE_TOO_COMPLEX`, `TOO_MANY_TEXT_LINES`, `PROCESSING_TIMEOUT`, `RESOURCE_LIMIT_EXCEEDED`, `PROCESSING_FAILED`), and `422 INVALID_REQUIREMENTS` for a bad requirements header. Full contract: [spec §17](docs/design/phase1-mvp-spec.md).
 
 Settings (environment variables, prefix `BLUEPRINTIQ_`): `RULESET_PATH`, `MAX_UPLOAD_BYTES`, `JOB_TIMEOUT_S`, `JOB_MEMORY_LIMIT_MB`, `MAX_CONCURRENT_JOBS`, `MAX_ADMITTED_REQUESTS`, `QUEUE_TIMEOUT_S`, `UPLOAD_TIMEOUT_S`, `LOG_LEVEL`. The default ruleset is the demonstration file shipped inside the package (`backend/src/blueprintiq/rules/demo_rules.toml`); set `BLUEPRINTIQ_RULESET_PATH` to use your own.
 
@@ -170,11 +171,11 @@ All executed and passing in GitHub Actions (Linux) on the milestone commit; no a
 
 | Suite | Command | Count |
 |---|---|---|
-| Backend (ruff, mypy --strict, pytest) | `cd backend && uv run pytest` | 1134 |
-| Frontend unit and component (Vitest) | `cd frontend && npm test` | 688 |
+| Backend (ruff, mypy --strict, pytest) | `cd backend && uv run pytest` | 1194 |
+| Frontend unit and component (Vitest) | `cd frontend && npm test` | 738 |
 | Proxy against the real Next.js server, launch binding | `npm run test:server` (after `npm run build`) | 24 |
-| Frontend against the real FastAPI backend | `npm run test:backend` | 180 |
-| Browser, Chromium via Playwright, real backend | `npm run test:e2e` (after build; first `npx playwright install chromium`) | 226 |
+| Frontend against the real FastAPI backend | `npm run test:backend` | 183 |
+| Browser, Chromium via Playwright, real backend | `npm run test:e2e` (after build; first `npx playwright install chromium`) | 229 |
 
 Also `npm run lint`, `npm run typecheck`, `npm run api:check` (generated API types match `backend/openapi.json`). Details: [docs/testing-and-evaluation.md](docs/testing-and-evaluation.md) (backend) and [F3](docs/frontend-f3.md#verification) (how overlay alignment is measured against rendered pixels and independent ground truth). Correctness is shown on **32 synthetic fixtures** (plus 12 generated geometry cases) whose expected results are written independently of the code under test; there is **no benchmark on real CAD drawings**.
 
@@ -186,8 +187,8 @@ Also `npm run lint`, `npm run typecheck`, `npm run api:check` (generated API typ
 * One F1 proxy test failed once, unexplained, and never recurred (details in [F2](docs/frontend-f2.md#known-limitations-and-notes)); no other known flaky tests. Browser tests need Chromium installed.
 * Single-page, vector/text PDFs only; no scans/OCR, DWG, multi-page, text at non-right angles, `/UserUnit` scaling.
 * English labels and the documented annotation grammar only; no `Ø`, tolerances, ranges or component association (rules apply per measurement type, not per feature).
-* Material rules check **presence only**, never the grade.
-* Rules are demonstration constraints.
+* Material rules check **presence**, or an exact match of the code written on the drawing; they never judge whether a material is suitable.
+* The default rules are demonstration constraints; user-set requirements are limited to the four listed in [docs/custom-requirements.md](docs/custom-requirements.md), apply per measurement type, and are not saved.
 * About 1.2 s per request on Windows (a fresh worker process each time).
 
 Full list: [docs/testing-and-evaluation.md](docs/testing-and-evaluation.md#limitations) and [docs/security-and-deployment.md](docs/security-and-deployment.md).

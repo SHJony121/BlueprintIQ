@@ -97,13 +97,18 @@ export function UploadPanel({ state, onFiles, onCancel }: UploadPanelProps) {
 
 function CurrentFile({ state, onCancel }: { state: InspectionState; onCancel: () => void }) {
   if (state.status === "idle" || state.status === "rejected") return null;
-  const name = state.status === "running" || state.status === "failed" ? state.file.name : state.fileName;
+  const name =
+    state.status === "running" || state.status === "failed" || state.status === "waiting"
+      ? state.file.name
+      : state.fileName;
   const detail =
     state.status === "running"
       ? `Inspecting, ${formatBytes(state.file.size)}`
       : state.status === "succeeded"
         ? "Inspected"
-        : "Not inspected";
+        : state.status === "waiting"
+          ? "Not inspected yet: fix the requirements, then run the inspection"
+          : "Not inspected";
   return (
     <div className="mt-3 flex min-h-8 flex-wrap items-center gap-x-3 gap-y-2 text-sm">
       <span className="min-w-0 break-all font-mono">{name}</span>

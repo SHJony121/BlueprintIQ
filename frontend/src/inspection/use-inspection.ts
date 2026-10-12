@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useReducer, useRef } from "react";
 import { runInspection, type InspectionResult, type RunInspection } from "@/api/client";
 import { inspectionReducer, initialState, type InspectionAction } from "./state";
+import type { ParsedRequirements } from "./requirements";
 import { chooseFile } from "./validate-file";
 
 /**
@@ -18,6 +19,7 @@ export function useInspection(run: RunInspection = runInspection) {
   const [state, dispatch] = useReducer(inspectionReducer, initialState);
   const current = useRef<{ id: number; controller: AbortController } | null>(null);
   const lastId = useRef(0);
+  const lastRequest = useRef<{ file: File; requirements: ParsedRequirements } | null>(null);
   const lastFile = useRef<File | null>(null);
 
   const abortCurrent = useCallback(() => {
@@ -26,33 +28,48 @@ export function useInspection(run: RunInspection = runInspection) {
   }, []);
 
   const start = useCallback(
-    (file: File) => {
+    (file: File, requirements: ParsedRequirements) => {
       abortCurrent();
       const id = ++lastId.current;
       const controller = new AbortController();
       current.current = { id, controller };
       lastFile.current = file;
-      dispatch({ type: "started", file });
-      void run(file, { signal: controller.signal }).then((result) => {
-        if (current.current?.id !== id) return; // superseded, cancelled or unmounted
-        current.current = null;
-        const action = toAction(file, result);
-        if (action !== null) dispatch(action);
-      });
+      lastRequest.current = { file, requirements };
+      dispatch({ type: "started", file, requirementsKey: requirements.key });
+      void run(file, { signal: controller.signal, requirements: requirements.header }).then(
+        (result) => {
+          if (current.current?.id !== id) return; // superseded, cancelled or unmounted
+          current.current = null;
+          const action = toAction(file, result, requirements.key);
+          if (action !== null) dispatch(action);
+        },
+      );
     },
     [run, abortCurrent],
   );
 
-  /** A file chosen or dropped: inspect it, or explain why it cannot be. */
+  /**
+   * A file chosen or dropped: inspect it with the current requirements, or explain why it
+   * cannot be. With invalid requirements (`null`) the file is kept and waits for them.
+   */
   const select = useCallback(
-    (files: readonly File[]) => {
+    (files: readonly File[], requirements: ParsedRequirements | null) => {
       const choice = chooseFile(files);
       if (choice === null) return;
       if ("file" in choice) {
-        start(choice.file);
+        if (requirements === null) {
+          abortCurrent();
+          lastFile.current = choice.file;
+          lastRequest.current = null;
+          dispatch({ type: "waiting", file: choice.file });
+        } else {
+          start(choice.file, requirements);
+        }
         return;
       }
       abortCurrent();
+      lastFile.current = null;
+      lastRequest.current = null;
       dispatch({
         type: "rejected",
         fileName: choice.fileName,
@@ -63,22 +80,32 @@ export function useInspection(run: RunInspection = runInspection) {
     [start, abortCurrent],
   );
 
+  /** The same inspection again, with the requirements it used. */
   const retry = useCallback(() => {
-    if (lastFile.current !== null) start(lastFile.current);
+    if (lastRequest.current !== null) start(lastRequest.current.file, lastRequest.current.requirements);
   }, [start]);
+
+  /** Inspect the file already chosen with (new) requirements. */
+  const rerun = useCallback(
+    (requirements: ParsedRequirements) => {
+      if (lastFile.current !== null) start(lastFile.current, requirements);
+    },
+    [start],
+  );
 
   const cancel = useCallback(() => {
     abortCurrent();
     lastFile.current = null;
+    lastRequest.current = null;
     dispatch({ type: "cleared" });
   }, [abortCurrent]);
 
   useEffect(() => abortCurrent, [abortCurrent]);
 
-  return { state, select, retry, cancel };
+  return { state, select, retry, rerun, cancel };
 }
 
-function toAction(file: File, result: InspectionResult): InspectionAction | null {
+function toAction(file: File, result: InspectionResult, requirementsKey: string): InspectionAction | null {
   switch (result.kind) {
     case "report":
       return {
@@ -86,11 +113,13 @@ function toAction(file: File, result: InspectionResult): InspectionAction | null
         file,
         report: result.report,
         requestId: result.requestId,
+        requirementsKey,
       };
     case "error":
       return {
         type: "failed",
         file,
+        requirementsKey,
         failure: {
           kind: "api",
           status: result.status,
@@ -103,6 +132,7 @@ function toAction(file: File, result: InspectionResult): InspectionAction | null
       return {
         type: "failed",
         file,
+        requirementsKey,
         failure: {
           kind: "malformed",
           status: result.status,
@@ -112,7 +142,7 @@ function toAction(file: File, result: InspectionResult): InspectionAction | null
       };
     case "network":
     case "timeout":
-      return { type: "failed", file, failure: { kind: result.kind } };
+      return { type: "failed", file, requirementsKey, failure: { kind: result.kind } };
     case "aborted":
       return null;
   }

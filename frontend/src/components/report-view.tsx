@@ -1,4 +1,5 @@
 import type { InspectionReport } from "@/api/types";
+import { AppliedRequirements } from "./applied-requirements";
 import { DocumentPanel } from "./document-panel";
 import { FindingsList, type FindingLocation } from "./findings-list";
 import { MeasurementList, UnrecognizedList } from "./measurement-list";
@@ -18,6 +19,7 @@ export function ReportView({
 }) {
   return (
     <div className="flex flex-col gap-6">
+      <AppliedRequirements report={report} />
       <SummaryCards summary={report.summary} />
       <FindingsList
         findings={report.findings}

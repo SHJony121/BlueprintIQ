@@ -103,14 +103,34 @@ class RangeRule(_Config):
         return self
 
 
+MaterialCode = Annotated[
+    str,
+    StringConstraints(
+        strip_whitespace=True, to_upper=True, pattern=r"^[A-Za-z0-9][A-Za-z0-9 ._/-]{0,31}$"
+    ),
+]
+
+
 class RequiredRule(_Config):
-    """At least one readable annotation of the given type must be present."""
+    """At least one readable annotation of the given type must be present.
+
+    ``equals`` (material only) additionally requires the material code written on the
+    drawing to be exactly this code, compared after trimming and upper-casing, as the
+    drawing's own value is. It is a code match, not a judgement of suitability.
+    """
 
     kind: Literal["required"]
     id: RuleId
     applies_to: MeasurementType
     severity: Severity
     description: Text
+    equals: MaterialCode | None = None
+
+    @model_validator(mode="after")
+    def _equals_is_for_material(self) -> Self:
+        if self.equals is not None and self.applies_to is not MeasurementType.MATERIAL:
+            raise ValueError("equals is only valid for a material rule")
+        return self
 
 
 Rule = Annotated[RangeRule | RequiredRule, Field(discriminator="kind")]

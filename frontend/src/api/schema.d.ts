@@ -336,7 +336,10 @@ export interface operations {
     inspect_api_v1_inspections_post: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Optional per-request requirements: percent-encoded JSON (version 1; min_thickness_mm, max_diameter_mm, min_length_mm, max_length_mm, material). Without it the server's demonstration ruleset is used. */
+                "X-Inspection-Requirements"?: string;
+            };
             path?: never;
             cookie?: never;
         };

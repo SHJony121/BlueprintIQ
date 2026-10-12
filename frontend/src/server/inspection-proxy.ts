@@ -64,6 +64,10 @@ const BACKEND_ERROR_STATUSES = new Set([400, 404, 405, 408, 413, 415, 422, 500, 
 // backend checks the decoded length itself; this only bounds what is forwarded.
 const MAX_FILENAME_HEADER = 255 * 12;
 
+// The per-request requirements (percent-encoded JSON, a few hundred characters). Bounded
+// here and forwarded untouched: the backend parses it with a strict, fixed schema.
+const MAX_REQUIREMENTS_HEADER = 2048;
+
 const LOCAL_HOST = /^(localhost|127\.\d{1,3}\.\d{1,3}\.\d{1,3}|\[::1\])(:\d{1,5})?$/i;
 const REQUEST_ID = /^[0-9a-f]{32}$/;
 
@@ -138,6 +142,13 @@ function checkRequest(headers: Headers): ProxyErrorCode | undefined {
   ) {
     return "REQUEST_VALIDATION_ERROR";
   }
+  const requirements = headers.get("x-inspection-requirements");
+  if (
+    requirements !== null &&
+    (requirements.length > MAX_REQUIREMENTS_HEADER || !/^[\x20-\x7e]*$/.test(requirements))
+  ) {
+    return "INVALID_REQUIREMENTS";
+  }
   return undefined;
 }
 
@@ -177,6 +188,8 @@ function send(
     };
     const filename = request.headers.get("x-filename");
     if (filename !== null) headers["X-Filename"] = filename;
+    const requirements = request.headers.get("x-inspection-requirements");
+    if (requirements !== null) headers["X-Inspection-Requirements"] = requirements;
 
     const upstream = http.request({
       host: config.hostname,

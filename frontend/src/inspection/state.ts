@@ -13,15 +13,32 @@ export type Failure =
 export type InspectionState =
   | { status: "idle" }
   | { status: "rejected"; fileName: string; sizeBytes: number | null; problem: FileProblem }
-  | { status: "running"; file: File }
-  | { status: "succeeded"; file: File; fileName: string; report: InspectionReport; requestId: string | null }
-  | { status: "failed"; file: File; failure: Failure };
+  // A file chosen while the requirements are invalid: shown, not yet inspected.
+  | { status: "waiting"; file: File }
+  | { status: "running"; file: File; requirementsKey: string }
+  | {
+      status: "succeeded";
+      file: File;
+      fileName: string;
+      report: InspectionReport;
+      requestId: string | null;
+      /** The requirements this report was produced with (see parseRequirements().key). */
+      requirementsKey: string;
+    }
+  | { status: "failed"; file: File; failure: Failure; requirementsKey: string };
 
 export type InspectionAction =
   | { type: "rejected"; fileName: string; sizeBytes: number | null; problem: FileProblem }
-  | { type: "started"; file: File }
-  | { type: "succeeded"; file: File; report: InspectionReport; requestId: string | null }
-  | { type: "failed"; file: File; failure: Failure }
+  | { type: "waiting"; file: File }
+  | { type: "started"; file: File; requirementsKey: string }
+  | {
+      type: "succeeded";
+      file: File;
+      report: InspectionReport;
+      requestId: string | null;
+      requirementsKey: string;
+    }
+  | { type: "failed"; file: File; failure: Failure; requirementsKey: string }
   | { type: "cleared" };
 
 export const initialState: InspectionState = { status: "idle" };
@@ -35,8 +52,10 @@ export function inspectionReducer(_: InspectionState, action: InspectionAction):
         sizeBytes: action.sizeBytes,
         problem: action.problem,
       };
+    case "waiting":
+      return { status: "waiting", file: action.file };
     case "started":
-      return { status: "running", file: action.file };
+      return { status: "running", file: action.file, requirementsKey: action.requirementsKey };
     case "succeeded":
       return {
         status: "succeeded",
@@ -44,9 +63,15 @@ export function inspectionReducer(_: InspectionState, action: InspectionAction):
         fileName: action.file.name,
         report: action.report,
         requestId: action.requestId,
+        requirementsKey: action.requirementsKey,
       };
     case "failed":
-      return { status: "failed", file: action.file, failure: action.failure };
+      return {
+        status: "failed",
+        file: action.file,
+        failure: action.failure,
+        requirementsKey: action.requirementsKey,
+      };
     case "cleared":
       return initialState;
   }
