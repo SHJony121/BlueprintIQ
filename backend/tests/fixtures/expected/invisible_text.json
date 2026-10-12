@@ -1,0 +1,106 @@
+{
+  "name": "invisible_text",
+  "description": "Text in invisible render mode (3 Tr) and 0.5 pt text: neither is evidence; both are dropped and counted as hidden.",
+  "page": {
+    "width_pt": 595.0,
+    "height_pt": 842.0,
+    "rotation": 0,
+    "pdf_crop_box": [
+      0.0,
+      0.0,
+      595.0,
+      842.0
+    ]
+  },
+  "lines": [
+    {
+      "text": "THICKNESS: 4 mm",
+      "ink_box": [
+        72.0,
+        552.82,
+        159.79,
+        562.07
+      ],
+      "font_size": 10.0,
+      "advance_axis": "x"
+    },
+    {
+      "text": "DIAMETER: 20 mm",
+      "ink_box": [
+        72.0,
+        572.82,
+        159.79,
+        582.07
+      ],
+      "font_size": 10.0,
+      "advance_axis": "x"
+    },
+    {
+      "text": "LENGTH: 120 mm",
+      "ink_box": [
+        72.0,
+        592.82,
+        154.24,
+        602.07
+      ],
+      "font_size": 10.0,
+      "advance_axis": "x"
+    },
+    {
+      "text": "MATERIAL: SS400",
+      "ink_box": [
+        72.0,
+        612.82,
+        157.59,
+        622.07
+      ],
+      "font_size": 10.0,
+      "advance_axis": "x"
+    }
+  ],
+  "hidden_lines": 2,
+  "measurements": [
+    {
+      "id": "M1",
+      "kind": "dimension",
+      "dimension_type": "thickness",
+      "raw_text": "THICKNESS: 4 mm",
+      "value": "4",
+      "unit": "mm",
+      "normalized_value_mm": "4",
+      "status": "parsed",
+      "issues": []
+    },
+    {
+      "id": "M2",
+      "kind": "dimension",
+      "dimension_type": "diameter",
+      "raw_text": "DIAMETER: 20 mm",
+      "value": "20",
+      "unit": "mm",
+      "normalized_value_mm": "20",
+      "status": "parsed",
+      "issues": []
+    },
+    {
+      "id": "M3",
+      "kind": "dimension",
+      "dimension_type": "length",
+      "raw_text": "LENGTH: 120 mm",
+      "value": "120",
+      "unit": "mm",
+      "normalized_value_mm": "120",
+      "status": "parsed",
+      "issues": []
+    },
+    {
+      "id": "M4",
+      "kind": "material",
+      "raw_text": "MATERIAL: SS400",
+      "value": "SS400",
+      "status": "parsed",
+      "issues": []
+    }
+  ],
+  "unrecognized": []
+}

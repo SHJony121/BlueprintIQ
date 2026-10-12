@@ -1,0 +1,5 @@
+{
+  "name": "glyph_on_crop_edge",
+  "description": "The last glyph straddles the CropBox edge: every character counts as visible, but the box would extend off the page.",
+  "error": "PARTIALLY_VISIBLE_TEXT"
+}

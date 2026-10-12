@@ -1,0 +1,5 @@
+{
+  "name": "no_text",
+  "description": "Vector geometry only: no text layer (like a scan).",
+  "error": "NO_TEXT_LAYER"
+}

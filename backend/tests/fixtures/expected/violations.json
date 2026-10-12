@@ -1,0 +1,143 @@
+{
+  "name": "violations",
+  "description": "Parsable values that violate the demo thresholds (rules: M4).",
+  "page": {
+    "width_pt": 595.0,
+    "height_pt": 842.0,
+    "rotation": 0,
+    "pdf_crop_box": [
+      0.0,
+      0.0,
+      595.0,
+      842.0
+    ]
+  },
+  "lines": [
+    {
+      "text": "THICKNESS: 2 mm",
+      "ink_box": [
+        72.0,
+        552.82,
+        159.79,
+        562.07
+      ],
+      "font_size": 10.0,
+      "advance_axis": "x"
+    },
+    {
+      "text": "DIAMETER: 65 mm",
+      "ink_box": [
+        72.0,
+        572.82,
+        159.79,
+        582.07
+      ],
+      "font_size": 10.0,
+      "advance_axis": "x"
+    },
+    {
+      "text": "LENGTH: 600 mm",
+      "ink_box": [
+        72.0,
+        592.82,
+        154.24,
+        602.07
+      ],
+      "font_size": 10.0,
+      "advance_axis": "x"
+    },
+    {
+      "text": "MATERIAL: SS400",
+      "ink_box": [
+        72.0,
+        612.82,
+        157.59,
+        622.07
+      ],
+      "font_size": 10.0,
+      "advance_axis": "x"
+    },
+    {
+      "text": "TITLE: BRACKET",
+      "ink_box": [
+        330.0,
+        717.82,
+        410.02,
+        727.07
+      ],
+      "font_size": 10.0,
+      "advance_axis": "x"
+    },
+    {
+      "text": "SCALE: 1:2",
+      "ink_box": [
+        330.0,
+        737.82,
+        382.25,
+        747.07
+      ],
+      "font_size": 10.0,
+      "advance_axis": "x"
+    },
+    {
+      "text": "DRAWN: SYNTHETIC FIXTURE",
+      "ink_box": [
+        330.0,
+        757.82,
+        475.56,
+        767.07
+      ],
+      "font_size": 10.0,
+      "advance_axis": "x"
+    }
+  ],
+  "hidden_lines": 0,
+  "measurements": [
+    {
+      "id": "M1",
+      "kind": "dimension",
+      "dimension_type": "thickness",
+      "raw_text": "THICKNESS: 2 mm",
+      "value": "2",
+      "unit": "mm",
+      "normalized_value_mm": "2",
+      "status": "parsed",
+      "issues": []
+    },
+    {
+      "id": "M2",
+      "kind": "dimension",
+      "dimension_type": "diameter",
+      "raw_text": "DIAMETER: 65 mm",
+      "value": "65",
+      "unit": "mm",
+      "normalized_value_mm": "65",
+      "status": "parsed",
+      "issues": []
+    },
+    {
+      "id": "M3",
+      "kind": "dimension",
+      "dimension_type": "length",
+      "raw_text": "LENGTH: 600 mm",
+      "value": "600",
+      "unit": "mm",
+      "normalized_value_mm": "600",
+      "status": "parsed",
+      "issues": []
+    },
+    {
+      "id": "M4",
+      "kind": "material",
+      "raw_text": "MATERIAL: SS400",
+      "value": "SS400",
+      "status": "parsed",
+      "issues": []
+    }
+  ],
+  "unrecognized": [
+    "TITLE",
+    "SCALE",
+    "DRAWN"
+  ]
+}

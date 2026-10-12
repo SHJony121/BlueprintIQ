@@ -1,0 +1,57 @@
+{
+  "name": "no_annotations",
+  "description": "Title block only; no supported annotations.",
+  "page": {
+    "width_pt": 595.0,
+    "height_pt": 842.0,
+    "rotation": 0,
+    "pdf_crop_box": [
+      0.0,
+      0.0,
+      595.0,
+      842.0
+    ]
+  },
+  "lines": [
+    {
+      "text": "TITLE: BRACKET",
+      "ink_box": [
+        330.0,
+        717.82,
+        410.02,
+        727.07
+      ],
+      "font_size": 10.0,
+      "advance_axis": "x"
+    },
+    {
+      "text": "SCALE: 1:2",
+      "ink_box": [
+        330.0,
+        737.82,
+        382.25,
+        747.07
+      ],
+      "font_size": 10.0,
+      "advance_axis": "x"
+    },
+    {
+      "text": "DRAWN: SYNTHETIC FIXTURE",
+      "ink_box": [
+        330.0,
+        757.82,
+        475.56,
+        767.07
+      ],
+      "font_size": 10.0,
+      "advance_axis": "x"
+    }
+  ],
+  "hidden_lines": 0,
+  "measurements": [],
+  "unrecognized": [
+    "TITLE",
+    "SCALE",
+    "DRAWN"
+  ]
+}

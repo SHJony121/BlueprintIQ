@@ -1,0 +1,5 @@
+{
+  "name": "glyph_mostly_clipped",
+  "description": "A rectangular clip hides most of the last glyph; MuPDF still reports it, but a viewer shows 'THICKNESS: 4 m'.",
+  "error": "PARTIALLY_VISIBLE_TEXT"
+}

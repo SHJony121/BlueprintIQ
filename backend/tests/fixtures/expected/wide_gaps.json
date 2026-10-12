@@ -1,0 +1,136 @@
+{
+  "name": "wide_gaps",
+  "description": "Gaps the PDF engine breaks lines at (about 0.9 em) but BlueprintIQ does not (< 2 em): a material grade split from its number, a unit split into 'm' + 'm' (must never read as metres), two annotations 1.5 em apart; and a 2.5 em gap that does separate two lines.",
+  "page": {
+    "width_pt": 595.0,
+    "height_pt": 842.0,
+    "rotation": 0,
+    "pdf_crop_box": [
+      0.0,
+      0.0,
+      595.0,
+      842.0
+    ]
+  },
+  "lines": [
+    {
+      "text": "MATERIAL: AISI 304",
+      "ink_box": [
+        72.0,
+        552.82,
+        172.65,
+        562.07
+      ],
+      "font_size": 10.0,
+      "advance_axis": "x"
+    },
+    {
+      "text": "THICKNESS: 4 m m",
+      "ink_box": [
+        72.0,
+        572.82,
+        171.79,
+        582.07
+      ],
+      "font_size": 10.0,
+      "advance_axis": "x"
+    },
+    {
+      "text": "LENGTH: 120 mm DIAMETER: 20 mm",
+      "ink_box": [
+        72.0,
+        592.82,
+        257.03,
+        602.07
+      ],
+      "font_size": 10.0,
+      "advance_axis": "x"
+    },
+    {
+      "text": "DIAMETER: 8 mm",
+      "ink_box": [
+        72.0,
+        612.82,
+        154.23,
+        622.07
+      ],
+      "font_size": 10.0,
+      "advance_axis": "x"
+    },
+    {
+      "text": "NOTE: X",
+      "ink_box": [
+        179.23,
+        612.82,
+        219.24,
+        622.07
+      ],
+      "font_size": 10.0,
+      "advance_axis": "x"
+    }
+  ],
+  "hidden_lines": 0,
+  "measurements": [
+    {
+      "id": "M1",
+      "kind": "material",
+      "raw_text": "MATERIAL: AISI 304",
+      "value": "AISI 304",
+      "status": "parsed",
+      "issues": []
+    },
+    {
+      "id": "M2",
+      "kind": "dimension",
+      "dimension_type": "thickness",
+      "raw_text": "THICKNESS: 4 m m",
+      "value": null,
+      "unit": null,
+      "normalized_value_mm": null,
+      "status": "ambiguous",
+      "issues": [
+        "unsupported_syntax"
+      ]
+    },
+    {
+      "id": "M3",
+      "kind": "dimension",
+      "dimension_type": "length",
+      "raw_text": "LENGTH: 120 mm DIAMETER: 20 mm",
+      "value": null,
+      "unit": null,
+      "normalized_value_mm": null,
+      "status": "ambiguous",
+      "issues": [
+        "unsupported_syntax"
+      ]
+    },
+    {
+      "id": "M4",
+      "kind": "dimension",
+      "dimension_type": "diameter",
+      "raw_text": "LENGTH: 120 mm DIAMETER: 20 mm",
+      "value": null,
+      "unit": null,
+      "normalized_value_mm": null,
+      "status": "ambiguous",
+      "issues": [
+        "unsupported_syntax"
+      ]
+    },
+    {
+      "id": "M5",
+      "kind": "dimension",
+      "dimension_type": "diameter",
+      "raw_text": "DIAMETER: 8 mm",
+      "value": "8",
+      "unit": "mm",
+      "normalized_value_mm": "8",
+      "status": "parsed",
+      "issues": []
+    }
+  ],
+  "unrecognized": [
+    "NOTE"
+  ]
+}

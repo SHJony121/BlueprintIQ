@@ -1,0 +1,5 @@
+{
+  "name": "slanted_text",
+  "description": "Text at 45 degrees; line segmentation is not reliable.",
+  "error": "UNSUPPORTED_GEOMETRY"
+}
