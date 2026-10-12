@@ -1,6 +1,6 @@
 # Security and deployment restrictions
 
-**BlueprintIQ Phase 1 is for trusted local use only. Public deployment is BLOCKED.**
+**BlueprintIQ (the Phase 1 backend and the Phase 2A local frontend) is for trusted local use only. Public deployment is BLOCKED.**
 
 ## What is implemented (and tested)
 
