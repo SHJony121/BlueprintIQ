@@ -135,6 +135,10 @@ def _read(
         return _uncertain(cad_id, source)
 
     nominal = Decimal(match["n"])
+    if kind is CadKind.LINEAR and not has_tolerance and unit_text is None and nominal == 0:
+        # A lone zero is most often a fragment of a stacked tolerance ("+0" over "-0.2"),
+        # not a 0 mm dimension. Kept as evidence, with no value.
+        return _uncertain(cad_id, source)
     if kind is CadKind.LINEAR and not has_tolerance and not _plausible_bare(match["n"]):
         return None
 

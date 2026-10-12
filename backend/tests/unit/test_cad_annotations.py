@@ -169,3 +169,29 @@ def test_conflicting_declarations_give_no_unit(notes: tuple[str, ...]) -> None:
     assert unit_note is None
     assert annotations[0].status is ExtractionStatus.AMBIGUOUS
     assert annotations[0].unit is None
+
+
+@pytest.mark.parametrize("text", ["0", "0.0", "0.00"])
+def test_a_lone_zero_is_a_fragment_not_a_dimension(text: str) -> None:
+    a = one(text)  # even with a millimetre note on the drawing
+    assert a.status is ExtractionStatus.AMBIGUOUS
+    assert (a.dimension_kind, a.nominal, a.unit) == (None, None, None)
+    assert a.source.raw_text == text
+
+
+@pytest.mark.parametrize(
+    ("text", "kind"),
+    [("0 mm", CadKind.LINEAR), ("0 ±0.1", CadKind.LINEAR), ("R0", CadKind.RADIUS),
+     ("Ø0", CadKind.DIAMETER), ("0°", CadKind.ANGLE)],
+)  # fmt: skip
+def test_an_explicitly_qualified_zero_is_still_read(text: str, kind: CadKind) -> None:
+    a = one(text)
+    assert a.status is ExtractionStatus.PARSED
+    assert (a.dimension_kind, a.nominal) == (kind, Decimal("0"))
+
+
+def test_many_stacked_tolerance_zeros_never_become_dimensions() -> None:
+    annotations, _ = read("2.7", "0", "0", "-0.1", "3", "0", NOTE)
+    parsed = [a.source.raw_text for a in annotations if a.status is ExtractionStatus.PARSED]
+    assert parsed == ["2.7", "3"]
+    assert [a.nominal for a in annotations if a.source.raw_text == "0"] == [None, None, None]

@@ -30,6 +30,7 @@ If a conflicting unit note exists (inches, centimetres, metres) or there is no n
 
 * An unlabeled value is never a thickness, length or diameter (`association` is always `none`). CAD annotations are separate from `measurements`, so no rule sees them and they cannot produce pass or fail.
 * A bare number is read only with unit evidence, at most 3 integer digits, no leading zero. Part numbers, dates, revision codes (`ABC-12345`, `2024-01-15`, `REV 3`), larger numbers and any labeled line are left alone.
+* A lone `0` (typically half of a stacked tolerance) is kept as an ambiguous observation, never a 0 mm dimension. A zero with its own qualifier (`0 mm`, `0 ±0.1`, `R0`, `Ø0`, `0°`) is still read.
 * A line with a strong signal (`±`, `Ø12`, `75°`, a lone `+0` or `-0.2`) that does not match a form is kept as an **ambiguous** observation with no values. A tolerance stacked on separate lines is therefore never joined to its nominal value.
 * Angled text is skipped as in CAD-1 and cannot be read here.
 
