@@ -637,8 +637,9 @@ describe("keyboard use", () => {
     await user.upload(fileInput(), pdf());
     calls[0]!.resolve(serviceError("SERVER_BUSY", 503));
     await screen.findByRole("alert");
-    await user.tab();
-    expect(document.activeElement).toBe(screen.getByRole("button", { name: "Try again" }));
+    const tryAgain = screen.getByRole("button", { name: "Try again" });
+    for (let i = 0; i < 30 && document.activeElement !== tryAgain; i += 1) await user.tab();
+    expect(document.activeElement).toBe(tryAgain);
     await user.keyboard("{Enter}");
     expect(run).toHaveBeenCalledTimes(2);
   });
@@ -652,7 +653,7 @@ describe("keyboard use", () => {
     const links = screen.getAllByRole("link");
     expect(links.length).toBe(3);
     const reached = new Set<Element>();
-    for (let i = 0; i < links.length + 3; i += 1) {
+    for (let i = 0; i < links.length + 40; i += 1) {
       await user.tab();
       if (links.includes(document.activeElement as HTMLAnchorElement)) {
         reached.add(document.activeElement!);

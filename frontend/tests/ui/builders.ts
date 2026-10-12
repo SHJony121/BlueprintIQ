@@ -3,6 +3,7 @@
 // data, not backend output; tests that need real backend responses use the real server
 // (tests/ui/real-responses.test.tsx).
 import { MAX_UPLOAD_BYTES } from "@/lib/limits";
+import { DEMO_FORM, parseRequirements, type ParsedRequirements } from "@/inspection/requirements";
 import type {
   BBox,
   DimensionMeasurement,
@@ -198,3 +199,10 @@ export function fileOfSize(name: string, type: string, size: number): File {
 export const pdf = (name = "drawing.pdf", size = 1319) => fileOfSize(name, "application/pdf", size);
 export const AT_LIMIT = MAX_UPLOAD_BYTES;
 export const OVER_LIMIT = MAX_UPLOAD_BYTES + 1;
+
+/** The demonstration requirements, parsed: what an untouched form sends. */
+export const DEMO_REQUIREMENTS = (() => {
+  const parsed = parseRequirements(DEMO_FORM);
+  if (!parsed.ok) throw new Error("demonstration requirements are invalid");
+  return parsed satisfies ParsedRequirements;
+})();

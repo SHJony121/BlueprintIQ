@@ -98,6 +98,43 @@ describe("proxy against the real backend", () => {
     expect((result.body.document as { filename: string }).filename).toBe(name);
   });
 
+  describe("custom requirements", () => {
+    const header = (requirements: object) => ({
+      "X-Inspection-Requirements": encodeURIComponent(JSON.stringify(requirements)),
+    });
+    const strict = { version: 1, min_thickness_mm: "50", material: { required: true, code: "SS400" } };
+
+    it("reach the engine through the proxy exactly as they do directly", async () => {
+      const pdf = new Uint8Array(drawing("valid_basic"));
+      const expected = await direct(pdf, header(strict));
+      const actual = await proxied(pdf, header(strict));
+      expect(actual.status).toBe(200);
+      expect(stable(actual.body)).toEqual(stable(expected.body));
+      expect((actual.body.ruleset as { id: string }).id).toBe("custom-requirements");
+      expect(actual.body.findings as unknown[]).not.toHaveLength(0);
+    });
+
+    it("change the outcome compared with the demonstration rules", async () => {
+      const pdf = new Uint8Array(drawing("valid_basic"));
+      const demo = await proxied(pdf);
+      const custom = await proxied(pdf, header(strict));
+      const fails = (body: Record<string, unknown>) =>
+        (body.findings as { status: string }[]).filter((f) => f.status === "fail").length;
+      expect((demo.body.ruleset as { id: string }).id).not.toBe("custom-requirements");
+      expect(fails(custom.body)).toBeGreaterThan(fails(demo.body));
+    });
+
+    it("are refused with INVALID_REQUIREMENTS when the backend rejects them, without echoing them", async () => {
+      const pdf = new Uint8Array(drawing("valid_basic"));
+      const bad = header({ version: 1, min_thickness_mm: "-1" });
+      const expected = await direct(pdf, bad);
+      const actual = await proxied(pdf, bad);
+      expect(actual.status).toBe(422);
+      expect((actual.body.error as { code: string }).code).toBe("INVALID_REQUIREMENTS");
+      expect(stable(actual.body)).toEqual(stable(expected.body));
+    });
+  });
+
   it("keeps the backend's own check of the decoded file name length", async () => {
     const headers = { "X-Filename": "a".repeat(256) };
     const pdf = new Uint8Array(drawing("valid_basic"));

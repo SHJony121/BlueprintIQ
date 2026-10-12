@@ -4,7 +4,22 @@ import { FINDING_LABEL, FINDING_MEANING, FINDING_ORDER } from "@/inspection/labe
  * Shown before any result, where it explains the four outcomes, and after a file was
  * refused or failed, where it only says there is nothing to show.
  */
-export function EmptyResults({ afterProblem = false }: { afterProblem?: boolean }) {
+export function EmptyResults({
+  afterProblem = false,
+  waiting = false,
+}: {
+  afterProblem?: boolean;
+  waiting?: boolean;
+}) {
+  if (waiting) {
+    return (
+      <div data-testid="empty-results" className="rounded-md border border-line bg-surface p-4">
+        <p className="text-sm text-muted">
+          The file is chosen but not inspected. Fix the requirements above, then run the inspection.
+        </p>
+      </div>
+    );
+  }
   if (afterProblem) {
     return (
       <div data-testid="empty-results" className="rounded-md border border-line bg-surface p-4">
@@ -46,6 +61,19 @@ export function ResultsSkeleton() {
           <div key={n} className={`${BLOCK} h-36`} />
         ))}
       </div>
+    </div>
+  );
+}
+
+/** Results that no longer match the requirements on screen are not shown at all. */
+export function StaleResults({ canRun }: { canRun: boolean }) {
+  return (
+    <div data-testid="stale-results" className="rounded-md border border-line border-l-4 border-l-review bg-review-tint p-4">
+      <p className="text-sm font-semibold text-review">The requirements changed</p>
+      <p className="mt-1 text-sm">
+        The previous results were produced with different requirements, so they are hidden.{" "}
+        {canRun ? "Run the inspection again to see results for the requirements shown." : "Fix the requirements, then run the inspection again."}
+      </p>
     </div>
   );
 }

@@ -17,6 +17,7 @@ export const ERRORS = {
     "Send the PDF as the request body with Content-Type: application/pdf.",
   ],
   REQUEST_VALIDATION_ERROR: [422, "The X-Filename header is invalid."],
+  INVALID_REQUIREMENTS: [422, "The inspection requirements are invalid."],
   FILE_TOO_LARGE: [413, "The upload exceeds the limit of 10 MiB (10485760 bytes)."],
   UPLOAD_TIMEOUT: [408, "The upload was not received in time."],
   CLIENT_DISCONNECTED: [400, "The upload was interrupted."],

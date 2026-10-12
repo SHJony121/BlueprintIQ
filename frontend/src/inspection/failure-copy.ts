@@ -107,6 +107,11 @@ const API_CODES: Record<string, Entry> = {
       "Something in the request was invalid, for example a file name longer than 255 characters.",
     hint: "Rename the file with a shorter name and choose it again.",
   },
+  INVALID_REQUIREMENTS: {
+    title: "The requirements were not accepted",
+    explanation: "The inspection requirements were refused as invalid.",
+    hint: "Check the values in the requirements section and run the inspection again.",
+  },
   CLIENT_DISCONNECTED: {
     title: "The upload was interrupted",
     explanation: "The connection closed before the whole file arrived.",

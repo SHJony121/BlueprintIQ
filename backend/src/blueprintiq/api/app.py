@@ -46,7 +46,12 @@ from blueprintiq.api.settings import Settings
 from blueprintiq.api.worker import JobResult, run_job
 from blueprintiq.domain.models import InspectionReport
 from blueprintiq.ingestion.limits import MIB, IngestionLimits
-from blueprintiq.rules.config import load_ruleset
+from blueprintiq.rules.config import Ruleset, load_ruleset
+from blueprintiq.rules.requirements import (
+    MAX_HEADER_CHARS,
+    RequirementsError,
+    parse_requirements,
+)
 
 Job = Callable[..., Any]
 _MAX_FILENAME = 255
@@ -156,10 +161,21 @@ def create_app(settings: Settings | None = None, *, job: Job = inspection_job) -
         responses=_ERRORS,
         summary="Inspect one PDF drawing",
         openapi_extra={
+            "parameters": [
+                {
+                    "name": "X-Inspection-Requirements",
+                    "in": "header",
+                    "required": False,
+                    "description": "Optional per-request requirements: percent-encoded JSON "
+                    "(version 1; min_thickness_mm, max_diameter_mm, min_length_mm, max_length_mm, "
+                    "material). Without it the server's demonstration ruleset is used.",
+                    "schema": {"type": "string", "maxLength": MAX_HEADER_CHARS},
+                }
+            ],
             "requestBody": {
                 "required": True,
                 "content": {"application/pdf": {"schema": {"type": "string", "format": "binary"}}},
-            }
+            },
         },
     )
     async def inspect(request: Request) -> Response:
@@ -185,9 +201,14 @@ def create_app(settings: Settings | None = None, *, job: Job = inspection_job) -
                     extra={"event": "client_disconnect", "request_id": request.state.request_id},
                 )
                 raise ApiError(400, "CLIENT_DISCONNECTED", "The upload was interrupted.") from None
-            return await _inspect(request, data, filename)
+            # After the body is read, so a refusal never answers while the client is still
+            # sending (which can reset its connection before it reads the reply).
+            rules = _requirements(request, ruleset)
+            return await _inspect(request, data, filename, rules)
 
-    async def _inspect(request: Request, data: bytes, filename: str | None) -> Response:
+    async def _inspect(
+        request: Request, data: bytes, filename: str | None, rules: Ruleset
+    ) -> Response:
 
         def run_when_a_worker_is_free() -> JobResult | None:
             if not workers.acquire(timeout=settings.queue_timeout_s):
@@ -195,7 +216,7 @@ def create_app(settings: Settings | None = None, *, job: Job = inspection_job) -
             try:
                 return run_job(
                     job,
-                    (data, ruleset, filename, limits),
+                    (data, rules, filename, limits),
                     timeout_s=settings.job_timeout_s,
                     memory_limit_mb=settings.job_memory_limit_mb,
                 )
@@ -231,6 +252,17 @@ class _Admission:
         finally:
             with self._lock:
                 self._active -= 1
+
+
+def _requirements(request: Request, default: Ruleset) -> Ruleset:
+    """The ruleset for this request: the one in the header if present, else the default."""
+    raw = request.headers.get("x-inspection-requirements")
+    if raw is None:
+        return default
+    try:
+        return parse_requirements(raw)
+    except RequirementsError as exc:
+        raise ApiError(422, "INVALID_REQUIREMENTS", " ".join(exc.problems)[:480]) from None
 
 
 def _filename(request: Request) -> str | None:

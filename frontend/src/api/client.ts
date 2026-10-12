@@ -15,6 +15,8 @@ export type InspectionResult =
 
 export interface RunOptions {
   signal: AbortSignal;
+  /** Percent-encoded requirements header value; omitted means the server's demonstration rules. */
+  requirements?: string | null;
   timeoutMs?: number;
   fetchImpl?: typeof fetch;
 }
@@ -23,7 +25,7 @@ export type RunInspection = (file: File, options: RunOptions) => Promise<Inspect
 
 /** Upload one PDF and classify the answer. Never throws for network or HTTP problems. */
 export const runInspection: RunInspection = async (file, options) => {
-  const { signal, timeoutMs = CLIENT_TIMEOUT_MS, fetchImpl = fetch } = options;
+  const { signal, requirements = null, timeoutMs = CLIENT_TIMEOUT_MS, fetchImpl = fetch } = options;
   if (signal.aborted) return { kind: "aborted" };
 
   const controller = new AbortController();
@@ -42,6 +44,7 @@ export const runInspection: RunInspection = async (file, options) => {
       headers: {
         "Content-Type": "application/pdf",
         "X-Filename": encodeURIComponent(file.name),
+        ...(requirements === null ? {} : { "X-Inspection-Requirements": requirements }),
       },
       body: file,
       cache: "no-store",

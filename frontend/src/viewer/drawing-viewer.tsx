@@ -13,7 +13,7 @@ import { useDevicePixelRatio, useElementWidth } from "./use-layout-signals";
 import { useOpenedPdf } from "./use-opened-pdf";
 import { fitScale, maxScaleFor, MIN_SCALE, resolveScale, zoomIn, zoomOut, type Zoom } from "./zoom";
 
-export type InspectionPhase = "none" | "running" | "failed" | "succeeded";
+export type InspectionPhase = "none" | "running" | "failed" | "succeeded" | "stale";
 
 interface DrawingViewerProps {
   /** The PDF the user selected; rendered locally, never uploaded again for viewing. */
@@ -115,7 +115,9 @@ function trustEvidence(pdf: OpenedPdf, file: File, evidence: ViewerEvidence | nu
         ? "Evidence boxes appear when the inspection finishes."
         : inspection === "failed"
           ? "No evidence: the inspection did not produce a report for this file."
-          : "No inspection result for this file.";
+          : inspection === "stale"
+            ? "Evidence hidden: the requirements changed since this inspection. Run it again."
+            : "No inspection result for this file.";
     return { show: false, message };
   }
   if (pdf.sha256 === null) {

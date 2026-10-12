@@ -142,7 +142,17 @@ def _required(rule: RequiredRule, group: list[Measurement]) -> list[_Outcome]:
             actual += _converted_note(readable[1:])
     else:
         actual = f"{len(readable)} readable {name} {_plural('annotation', len(readable))}"
-    if rule.applies_to is MeasurementType.MATERIAL:
+    if rule.applies_to is MeasurementType.MATERIAL and rule.equals is not None:
+        written = readable[0].value
+        if written != rule.equals:
+            message = f"The material is {written}; the requirement is {rule.equals}."
+            return [_Outcome(rule, FindingStatus.FAIL, tuple(cited), actual, message)]
+        message = (
+            f"The material annotation ({written}) matches the required code {rule.equals}. "
+            "This compares the code written on the drawing only; it does not check whether "
+            "the material is suitable."
+        )
+    elif rule.applies_to is MeasurementType.MATERIAL:
         message = (
             f"A material annotation is present ({_reading(readable[0])}). This checks presence "
             "only; it does not check whether the material is suitable."
@@ -212,11 +222,12 @@ def _unreadable(
 
 
 def _finding(finding_id: str, o: _Outcome) -> Finding:
-    expected = (
-        _expected(o.rule)
-        if isinstance(o.rule, RangeRule)
-        else f"a readable {o.rule.applies_to.value} annotation"
-    )
+    if isinstance(o.rule, RangeRule):
+        expected = _expected(o.rule)
+    elif o.rule.equals is not None:
+        expected = f"a material annotation reading {o.rule.equals}"
+    else:
+        expected = f"a readable {o.rule.applies_to.value} annotation"
     return Finding(
         id=finding_id,
         rule_id=o.rule.id,

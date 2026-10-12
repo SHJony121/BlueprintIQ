@@ -218,6 +218,18 @@ describe("header filtering", () => {
     expect(headers.host).toBe(`127.0.0.1:${server.port}`);
   });
 
+  it("forwards the requirements header unchanged, and only when present", async () => {
+    const server = await upstream(afterBody((_req, res) => json(res, 200, REPORT)));
+    const value = encodeURIComponent('{"version":1,"min_thickness_mm":"4"}');
+    await proxyInspection(
+      inspectionRequest(drawing("valid_basic"), { "x-inspection-requirements": value }),
+      configFor(server.port),
+    );
+    await proxyInspection(inspectionRequest(drawing("valid_basic")), configFor(server.port));
+    expect(server.requests[0]!.headers["x-inspection-requirements"]).toBe(value);
+    expect(server.requests[1]!.headers["x-inspection-requirements"]).toBeUndefined();
+  });
+
   it("does not forward X-Filename when the browser sends none", async () => {
     const server = await upstream(afterBody((_req, res) => json(res, 200, REPORT)));
     await proxyInspection(inspectionRequest(drawing("valid_basic")), configFor(server.port));
@@ -251,6 +263,16 @@ describe("request validation (nothing is forwarded)", () => {
     const result = await refused(request);
     expect(result.status).toBe(415);
     expect(result.error.code).toBe("UNSUPPORTED_CONTENT_TYPE");
+  });
+
+  it.each([
+    ["a tab character", "a\tb"],
+    ["unencoded non-ASCII", "é"],
+    ["an over-long value", "a".repeat(2049)],
+  ])("refuses a requirements header with %s with 422 INVALID_REQUIREMENTS", async (_label, value) => {
+    const result = await refused(inspectionRequest(drawing("valid_basic"), { "x-inspection-requirements": value }));
+    expect(result.status).toBe(422);
+    expect(result.error.code).toBe("INVALID_REQUIREMENTS");
   });
 
   it.each([

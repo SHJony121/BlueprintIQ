@@ -13,11 +13,12 @@ function reply(status: number, body: unknown, headers: Record<string, string> = 
 
 const run = (
   fetchImpl: typeof fetch,
-  overrides: { signal?: AbortSignal; timeoutMs?: number; file?: File } = {},
+  overrides: { signal?: AbortSignal; timeoutMs?: number; file?: File; requirements?: string | null } = {},
 ) =>
   runInspection(overrides.file ?? pdf(), {
     signal: overrides.signal ?? new AbortController().signal,
     timeoutMs: overrides.timeoutMs,
+    requirements: overrides.requirements,
     fetchImpl,
   });
 
@@ -38,6 +39,16 @@ describe("the request", () => {
       "X-Filename": "bracket.pdf",
     });
     expect(init?.cache).toBe("no-store");
+  });
+
+  it("sends the requirements header only when requirements are given", async () => {
+    const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(reply(200, makeReport()));
+    await run(fetchImpl, { file: pdf("a.pdf") });
+    await run(fetchImpl, { file: pdf("a.pdf"), requirements: "%7B%7D" });
+    const first = fetchImpl.mock.calls[0]![1]!.headers as Record<string, string>;
+    const second = fetchImpl.mock.calls[1]![1]!.headers as Record<string, string>;
+    expect(first).not.toHaveProperty("X-Inspection-Requirements");
+    expect(second["X-Inspection-Requirements"]).toBe("%7B%7D");
   });
 
   it("percent-encodes file names so any name is a valid header value", async () => {
