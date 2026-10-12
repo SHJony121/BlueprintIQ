@@ -232,3 +232,19 @@ class TestUnrecognizedAnnotation:
     def test_blank_label_is_rejected(self) -> None:
         with pytest.raises(ValidationError):
             UnrecognizedAnnotation(label=" ", source=evidence())
+
+
+@pytest.mark.parametrize(
+    ("value", "text"), [("0.0000001", "0.0000001"), ("1E+3", "1000"), ("4.50", "4.50")]
+)
+def test_json_uses_plain_decimal_notation_losslessly(value: str, text: str) -> None:
+    m = parsed_dimension(value=value, normalized_value_mm=value)
+    payload = json.loads(m.model_dump_json())
+    assert payload["value"] == text
+    assert DimensionMeasurement.model_validate_json(m.model_dump_json()) == m
+
+
+@pytest.mark.parametrize("bad_id", ["M0", "M02", "M00"])
+def test_measurement_ids_have_no_leading_zeros(bad_id: str) -> None:
+    with pytest.raises(ValidationError):
+        parsed_dimension(id=bad_id)

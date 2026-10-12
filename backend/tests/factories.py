@@ -8,6 +8,7 @@ from blueprintiq.domain.models import (
     DimensionMeasurement,
     DimensionType,
     DocumentInfo,
+    EvidenceRef,
     ExtractionMethod,
     ExtractionStatus,
     Finding,
@@ -81,6 +82,7 @@ def finding(**overrides: Any) -> Finding:
     values: dict[str, Any] = {
         "id": "F1",
         "rule_id": "THK-MIN-001",
+        "rule_description": "Plate thickness must be at least 3 mm.",
         "status": FindingStatus.PASS,
         "severity": Severity.ERROR,
         "measurement_ids": ("M1",),
@@ -88,6 +90,14 @@ def finding(**overrides: Any) -> Finding:
         "actual": "4 mm",
         "message": "Thickness 4 mm meets the minimum of 3 mm.",
     } | overrides
+    # By default, evidence points at the factory measurements' default location.
+    values.setdefault(
+        "evidence",
+        tuple(
+            EvidenceRef(measurement_id=mid, page_number=1, bbox=bbox())
+            for mid in values["measurement_ids"]
+        ),
+    )
     return Finding(**values)
 
 
@@ -114,7 +124,15 @@ def document_info(**overrides: Any) -> DocumentInfo:
 
 
 def report(**overrides: Any) -> InspectionReport:
-    findings = overrides.pop("findings", (finding(),))
+    measurements = overrides.get("measurements", (parsed_dimension(), parsed_material()))
+    default_findings: tuple[Finding, ...] = ()
+    if measurements:
+        first = measurements[0]
+        ref = EvidenceRef(
+            measurement_id=first.id, page_number=first.source.page_number, bbox=first.source.bbox
+        )
+        default_findings = (finding(measurement_ids=(first.id,), evidence=(ref,)),)
+    findings = overrides.pop("findings", default_findings)
     values: dict[str, Any] = {
         "document": document_info(),
         "ruleset": RulesetInfo(id="demo", version="0.1.0"),

@@ -26,6 +26,7 @@ from pydantic import (
     BeforeValidator,
     ConfigDict,
     Field,
+    PlainSerializer,
     StringConstraints,
     field_validator,
     model_validator,
@@ -67,13 +68,15 @@ Quantity = Annotated[
     Decimal,
     BeforeValidator(_reject_float),
     Field(allow_inf_nan=False, ge=0, max_digits=30),
+    # JSON: an exact string in plain notation ("0.0000001", not "1E-7"); lossless.
+    PlainSerializer(lambda v: format(v, "f"), return_type=str, when_used="json"),
 ]
 """A non-negative, finite Decimal. Python floats and JSON numbers are rejected."""
 
 Coordinate = Annotated[float, Field(allow_inf_nan=False)]
 NonBlankStr = Annotated[str, StringConstraints(max_length=500), AfterValidator(_non_blank)]
-MeasurementId = Annotated[str, StringConstraints(pattern=r"^M\d+$")]
-FindingId = Annotated[str, StringConstraints(pattern=r"^F\d+$")]
+MeasurementId = Annotated[str, StringConstraints(pattern=r"^M[1-9][0-9]*$")]
+FindingId = Annotated[str, StringConstraints(pattern=r"^F[1-9][0-9]*$")]
 RuleId = Annotated[str, StringConstraints(pattern=r"^[A-Z][A-Z0-9]*(-[A-Z0-9]+)*$", max_length=64)]
 
 
@@ -88,6 +91,20 @@ class DimensionType(StrEnum):
     THICKNESS = "thickness"
     DIAMETER = "diameter"
     LENGTH = "length"
+
+
+class MeasurementType(StrEnum):
+    """What an annotation measures: a dimension type, or the material."""
+
+    THICKNESS = "thickness"
+    DIAMETER = "diameter"
+    LENGTH = "length"
+    MATERIAL = "material"
+
+
+# A part has one thickness and one material; it may have several holes and
+# several annotated lengths (spec section 12.B). Fixed in code, not configurable.
+SINGLE_VALUED_TYPES = frozenset({MeasurementType.THICKNESS, MeasurementType.MATERIAL})
 
 
 class ExtractionStatus(StrEnum):
@@ -266,6 +283,12 @@ class MaterialAnnotation(_Frozen):
 Measurement = Annotated[DimensionMeasurement | MaterialAnnotation, Field(discriminator="kind")]
 
 
+def measurement_type(measurement: DimensionMeasurement | MaterialAnnotation) -> MeasurementType:
+    if isinstance(measurement, DimensionMeasurement):
+        return MeasurementType(measurement.dimension_type.value)
+    return MeasurementType.MATERIAL
+
+
 class UnrecognizedAnnotation(_Frozen):
     """A labeled line whose label Phase 1 does not support. Reported, never evaluated."""
 
@@ -276,12 +299,24 @@ class UnrecognizedAnnotation(_Frozen):
 # --------------------------------------------------------------------- findings
 
 
+class EvidenceRef(_Frozen):
+    """Where a measurement a finding relies on was read. Copied from its source."""
+
+    measurement_id: MeasurementId
+    page_number: int = Field(ge=1)
+    bbox: BBox | None  # None when the location is unknown; never invented
+
+
 class Finding(_Frozen):
+    """The outcome of one rule for one measurement or group of measurements."""
+
     id: FindingId
     rule_id: RuleId
+    rule_description: NonBlankStr
     status: FindingStatus
     severity: Severity
     measurement_ids: tuple[MeasurementId, ...]
+    evidence: tuple[EvidenceRef, ...]  # one per measurement id, in the same order
     expected: NonBlankStr
     actual: NonBlankStr | None
     message: NonBlankStr
@@ -290,6 +325,8 @@ class Finding(_Frozen):
     def _consistent(self) -> Self:
         if len(set(self.measurement_ids)) != len(self.measurement_ids):
             raise ValueError("measurement_ids contains duplicates")
+        if tuple(e.measurement_id for e in self.evidence) != self.measurement_ids:
+            raise ValueError("evidence must list exactly the referenced measurements, in order")
         if self.status is FindingStatus.MISSING:
             if self.measurement_ids or self.actual is not None:
                 raise ValueError(
@@ -448,6 +485,14 @@ class InspectionReport(_Frozen):
                 measurement = by_id.get(mid)
                 if measurement is None:
                     raise ValueError(f"finding {f.id} references unknown measurement {mid}")
+                ref = next(e for e in f.evidence if e.measurement_id == mid)
+                if (ref.page_number, ref.bbox) != (
+                    measurement.source.page_number,
+                    measurement.source.bbox,
+                ):
+                    raise ValueError(
+                        f"finding {f.id} evidence for {mid} does not match the measurement source"
+                    )
                 confirmed = f.status in (FindingStatus.PASS, FindingStatus.FAIL)
                 if confirmed and measurement.status is ExtractionStatus.AMBIGUOUS:
                     raise ValueError(

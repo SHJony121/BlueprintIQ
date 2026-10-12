@@ -7,11 +7,15 @@ from pydantic import ValidationError
 
 from blueprintiq.domain.models import (
     DISCLAIMER,
+    SINGLE_VALUED_TYPES,
+    EvidenceRef,
     ExtractionStatus,
     FindingStatus,
     FindingSummary,
     InspectionReport,
+    MeasurementType,
     UnrecognizedAnnotation,
+    measurement_type,
 )
 from tests.factories import (
     SHA256,
@@ -259,3 +263,61 @@ class TestUncertainInputNeverBecomesConfirmedOutcome:
                 measurements=(parsed_dimension(), ambiguous_dimension(), parsed_material()),
                 findings=(f,),
             )
+
+
+# ------------------------------------------------ M4: explainable, evidence-backed
+
+
+class TestFindingExplainability:
+    def test_finding_carries_rule_description_and_evidence(self) -> None:
+        f = finding()
+        assert f.rule_description
+        assert [e.measurement_id for e in f.evidence] == list(f.measurement_ids)
+
+    def test_rule_description_must_not_be_blank(self) -> None:
+        with pytest.raises(ValidationError):
+            finding(rule_description=" ")
+
+    def test_evidence_must_list_exactly_the_referenced_measurements(self) -> None:
+        with pytest.raises(ValidationError, match="evidence"):
+            finding(evidence=())
+        with pytest.raises(ValidationError, match="evidence"):
+            finding(
+                measurement_ids=("M1",),
+                evidence=(EvidenceRef(measurement_id="M2", page_number=1, bbox=bbox()),),
+            )
+
+    def test_missing_finding_has_no_evidence(self) -> None:
+        f = finding(status=FindingStatus.MISSING, measurement_ids=(), actual=None)
+        assert f.evidence == ()
+
+
+class TestEvidenceConsistencyInReport:
+    def test_evidence_matching_the_measurement_source_is_accepted(self) -> None:
+        assert report().findings[0].evidence[0].bbox == bbox()
+
+    def test_evidence_box_that_differs_from_the_source_is_rejected(self) -> None:
+        wrong = EvidenceRef(measurement_id="M1", page_number=1, bbox=bbox(x0=10.0))
+        with pytest.raises(ValidationError, match="evidence"):
+            report(findings=(finding(evidence=(wrong,)),))
+
+    def test_evidence_page_that_differs_from_the_source_is_rejected(self) -> None:
+        m = parsed_dimension(source=evidence(bbox=None))
+        wrong = EvidenceRef(measurement_id="M1", page_number=2, bbox=None)
+        with pytest.raises(ValidationError, match="evidence"):
+            report(
+                document=document_info(page_count=2, pages=(page_info(), page_info(page_number=2))),
+                measurements=(m,),
+                findings=(finding(evidence=(wrong,)),),
+            )
+
+    def test_missing_coordinates_are_carried_as_none_not_invented(self) -> None:
+        m = parsed_dimension(source=evidence(bbox=None))
+        r = report(measurements=(m,))
+        assert r.findings[0].evidence[0].bbox is None
+
+
+def test_measurement_type_covers_dimensions_and_material() -> None:
+    assert measurement_type(parsed_dimension()) is MeasurementType.THICKNESS
+    assert measurement_type(parsed_material()) is MeasurementType.MATERIAL
+    assert {t.value for t in SINGLE_VALUED_TYPES} == {"thickness", "material"}

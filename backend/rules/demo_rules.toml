@@ -1,0 +1,41 @@
+# BlueprintIQ demonstration ruleset.
+# These thresholds are DEMONSTRATION VALUES ONLY. They are not taken from any
+# industry, national, or company standard and must not be used for real parts.
+# Thresholds are in millimetres and inclusive.
+
+[ruleset]
+id = "demo-plate-part"
+version = "0.1.0"
+description = "Demonstration thresholds only. Not an industry or company standard."
+
+[[rules]]
+id = "THK-MIN-001"
+kind = "range"
+applies_to = "thickness"
+min_mm = 3.0
+severity = "error"
+description = "Plate thickness must be at least 3 mm (demonstration value)."
+
+[[rules]]
+id = "DIA-MAX-001"
+kind = "range"
+applies_to = "diameter"
+max_mm = 50.0
+severity = "error"
+description = "Hole diameter must not exceed 50 mm (demonstration value)."
+
+[[rules]]
+id = "LEN-RANGE-001"
+kind = "range"
+applies_to = "length"
+min_mm = 10.0
+max_mm = 500.0
+severity = "warning"
+description = "Overall length must be between 10 mm and 500 mm (demonstration values)."
+
+[[rules]]
+id = "MAT-REQ-001"
+kind = "required"
+applies_to = "material"
+severity = "error"
+description = "A material specification must be present."

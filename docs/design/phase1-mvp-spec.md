@@ -598,3 +598,60 @@ Box check: the extracted box must contain the AFM ink box (0.5 pt) and exceed it
 - Annotations closer than 1 em on one baseline become ambiguous rather than separated.
 - Text at non-orthogonal angles rejects the whole drawing.
 - A material followed on the same baseline by unrelated text within about 0.9 em is read together with it and becomes ambiguous (safe, but noisy).
+
+---
+
+## 16. M4 — Rule configuration and evaluation (2026-10-12)
+
+Implemented in `rules/config.py`, `rules/engine.py` and `inspection.py`. Supersedes §5, §7 and §12.B where they differ.
+
+### 16.1 Configuration
+
+One TOML file, read with `tomllib.loads(text, parse_float=Decimal)` and validated completely before any drawing is processed. Shipped files: `backend/rules/demo_rules.toml` (demonstration values) and `backend/tests/fixtures/rules/test_rules.toml` (same rules; tests depend only on this one).
+
+Rejected, with one message per problem naming the rule id and field: invalid TOML; missing `[ruleset]` header or empty `rules`; unknown keys anywhere (including `min_cm`, `unit` — thresholds are always `min_mm` / `max_mm`); unknown `kind`, `applies_to` or `severity`; malformed or duplicate rule ids; blank descriptions; thresholds that are not plain numbers (booleans, strings such as `"3.0"`, dates), negative, NaN, infinite, or longer than 30 digits; `range` with no bound, with `min_mm > max_mm`, or on `material`; bounds on a `required` rule. `min_mm == max_mm` (an exact value) is allowed.
+
+### 16.2 Evaluation policy
+
+| Rule | Annotations of its type | Finding(s) |
+|---|---|---|
+| any | none | 1 × `missing` |
+| `range`, multi-valued (diameter, length) | each annotation | its own finding: `pass`/`fail` (inclusive bounds) if readable, `needs_review` if not |
+| `range`, single-valued (thickness) | all readable, equal value (exact Decimal after conversion, so 4 mm = 0.4 cm) | 1 × `pass`/`fail` citing all of them |
+| `range`, single-valued | readable values differ | 1 × `needs_review` (conflict) citing all |
+| `range`, single-valued | any unreadable among them | 1 × `needs_review` citing all |
+| `required`, single-valued (material, thickness) | all readable and equal | 1 × `pass` citing all |
+| `required`, single-valued | values differ, or any unreadable | 1 × `needs_review` citing all |
+| `required`, multi-valued | ≥ 1 readable | 1 × `pass` citing only the readable ones |
+| `required`, multi-valued | only unreadable | 1 × `needs_review` citing them |
+
+`pass` and `fail` only ever rest on parsed measurements (also enforced independently by the report validator). A `required` pass on material proves **presence only**; the message says so, and no grade is checked.
+
+### 16.3 Findings and ordering
+
+Each finding carries: `rule_id`, `rule_description`, `status`, `severity` (from the rule), `measurement_ids`, `evidence` (one `EvidenceRef(measurement_id, page_number, bbox)` per id, copied from the measurement's source; `bbox` stays `None` if unknown), `expected` (the threshold or requirement), `actual` (the value read, with the written unit when it was converted, e.g. `3.0 mm (written 0.3 cm)`; `None` for `missing`), and a fixed-template `message`. The report validator rejects evidence that does not match its measurement.
+
+Order is deterministic: rules in file order; within a rule, measurements by numeric id (M2 before M10); finding ids F1..Fn in that order. Input order does not matter (tested over all permutations).
+
+### 16.4 Pipeline
+
+`inspect_drawing(pdf_bytes, ruleset)` = `read_drawing` → `evaluate` → `InspectionReport` (document identity, ruleset id/version, measurements, unrecognized annotations, findings, four separate outcome counts, processing time, disclaimer). No API endpoints yet (M5).
+
+### 16.5 Test approach
+
+Expected outcomes for all 22 valid fixtures are written by hand in `tests/fixtures/expected_findings.py` from the fixture annotations and this policy — never produced by running the engine. Unit tests cover boundaries, exact Decimal comparison below float resolution, units, duplicates, conflicts, parsed + ambiguous, missing vs needs_review, multi-valued instances, ordering, evidence and wording; an exhaustive test checks every mix of passing, failing and unreadable thickness annotations. Mutation checks: every engine/config rule broken in turn is caught by a test.
+
+### 16.6 Limitations
+
+- Rules apply per measurement **type**, not per feature: two holes are two diameters, but the engine cannot tell which hole a diameter belongs to.
+- `required` on material checks presence only; checking the grade would need an allow-list rule, which is outside the approved two rule kinds.
+- Thresholds are demonstration values, not engineering standards.
+- Explanations are English only.
+
+### 16.7 Changes from the M4 independent review
+
+- **Explanations can never fail a report.** Lists of unreadable annotations name at most 3 ids, conflicts at most 4 distinct values with 3 ids each, then "and N more"; a final guard truncates any text above the 500-character field limit. Previously 16+ unreadable annotations of one type raised a validation error and lost the whole report.
+- **`required` on a single-valued dimension compares exact Decimal values in mm** (as `range` does), so `4 mm` and `0.4 cm` are one value, not a conflict. Material compares exact normalized text.
+- **Display rules** (explanations only; stored values are untouched): plain decimal without exponent or trailing zeros (`2.54 mm`, not `2.5400 mm`); a converted value always shows its written form (`2.54 mm (written 0.1 in)`), including in conflict lists, which group annotations by value in ascending numeric order (`3 mm (M2); 3.175 mm (M1 as 0.125 in)`); wording agrees in number ("2 thickness annotations could not be read").
+- **Config robustness:** non-UTF-8 files, integers too long to convert and deeply nested TOML now give `RulesetConfigError` (a UTF-8 BOM is accepted); duplicate ids are reported together with every other problem as `rules[i] (ID): id: duplicate of rules[j]`; `min_mm` on a `required` rule, `[rules]` written as a single table, and `rules` inside `[ruleset]` get specific hints; long ids are shortened in messages; `-0` thresholds become `0`.
+- **Model:** quantities serialize to JSON in plain notation (`"0.0000001"`, not `"1E-7"`), still exact strings; measurement and finding ids may not have leading zeros (`M02`).
