@@ -205,6 +205,11 @@ export interface components {
              * @constant
              */
             schema_version: "1.0";
+            /**
+             * Skipped Angled Lines
+             * @default 0
+             */
+            skipped_angled_lines: number;
             summary: components["schemas"]["FindingSummary"];
             /** Unrecognized Annotations */
             unrecognized_annotations: components["schemas"]["UnrecognizedAnnotation"][];

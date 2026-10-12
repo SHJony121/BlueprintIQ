@@ -131,6 +131,7 @@ export function makeReport({ measurements, findings, overrides }: ReportParts = 
       missing: count("missing"),
       needs_review: count("needs_review"),
     },
+    skipped_angled_lines: 0,
     processing_time_ms: 1203.4,
     disclaimer: "BlueprintIQ is an assistive engineering prototype.",
     ...overrides,

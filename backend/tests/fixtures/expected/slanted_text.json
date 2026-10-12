@@ -1,5 +1,5 @@
 {
   "name": "slanted_text",
-  "description": "Text at 45 degrees; line segmentation is not reliable.",
+  "description": "A THICKNESS label written at 45 degrees cannot be read, so the file is refused rather than reported as inspected.",
   "error": "UNSUPPORTED_GEOMETRY"
 }

@@ -21,7 +21,11 @@ from blueprintiq.domain.models import (
 )
 from blueprintiq.extraction.annotation_parser import parse_lines
 from blueprintiq.extraction.text_layer import extract_page_text
-from blueprintiq.ingestion.errors import InvalidPdfError, NoTextLayerError
+from blueprintiq.ingestion.errors import (
+    InvalidPdfError,
+    NoTextLayerError,
+    UnsupportedGeometryError,
+)
 from blueprintiq.ingestion.limits import DEFAULT_LIMITS, IngestionLimits
 from blueprintiq.ingestion.pdf_loader import open_pdf
 
@@ -44,6 +48,7 @@ class ExtractedText:
     pages: tuple[PageInfo, ...]
     lines: tuple[TextLine, ...]  # page by page, in displayed reading order
     hidden_lines: int
+    angled_lines: tuple[TextLine, ...] = ()  # visible, written at an angle, never read
 
 
 def extract_text(data: bytes, *, limits: IngestionLimits = DEFAULT_LIMITS) -> ExtractedText:
@@ -51,6 +56,7 @@ def extract_text(data: bytes, *, limits: IngestionLimits = DEFAULT_LIMITS) -> Ex
     pages: list[PageInfo] = []
     lines: list[TextLine] = []
     hidden = 0
+    angled: list[TextLine] = []
     with _PYMUPDF_LOCK, open_pdf(data, limits) as doc:
         pymupdf.TOOLS.reset_mupdf_warnings()
         for index in range(doc.page_count):
@@ -64,16 +70,38 @@ def extract_text(data: bytes, *, limits: IngestionLimits = DEFAULT_LIMITS) -> Ex
             pages.append(result.page)
             lines.extend(result.lines)
             hidden += result.hidden_lines
+            angled.extend(result.angled_lines)
         # MuPDF tolerates damaged content (e.g. a truncated compressed stream) and
         # may rebuild a broken file while reading it. Either way the text it returns
         # may not be what the author drew, so it is not evidence.
         if doc.is_repaired or damage_warnings(pymupdf.TOOLS.mupdf_warnings()):
             raise InvalidPdfError("The PDF content is damaged or malformed.")
+    if angled and not lines:
+        raise UnsupportedGeometryError(
+            "All of the visible text is written at an angle, which is not supported."
+        )
     if not lines:
         raise NoTextLayerError(
             "The PDF has no visible text. Scanned drawings (images) are not supported."
         )
-    return ExtractedText(pages=tuple(pages), lines=tuple(lines), hidden_lines=hidden)
+    _refuse_angled_measurements(angled)
+    return ExtractedText(
+        pages=tuple(pages), lines=tuple(lines), hidden_lines=hidden, angled_lines=tuple(angled)
+    )
+
+
+def _refuse_angled_measurements(angled: list[TextLine]) -> None:
+    """Fail closed: angled text is not read, so it must not hide a measurement.
+
+    Any supported label on an angled line (alone or merged with other text) means a
+    value a rule may use was skipped, and the drawing is refused rather than reported
+    as inspected.
+    """
+    if parse_lines(angled, method=ExtractionMethod.PDF_TEXT_LAYER).measurements:
+        raise UnsupportedGeometryError(
+            "Text written at an angle contains a supported measurement label, which cannot "
+            "be read, so the drawing cannot be inspected reliably."
+        )
 
 
 def damage_warnings(warnings: str) -> list[str]:
@@ -105,6 +133,7 @@ def read_drawing(
         unrecognized_annotations=parsed.unrecognized,
         text_lines=len(text.lines),
         hidden_text_lines=text.hidden_lines,
+        angled_text_lines=len(text.angled_lines),
         skipped_lines=parsed.skipped_lines,
     )
 
