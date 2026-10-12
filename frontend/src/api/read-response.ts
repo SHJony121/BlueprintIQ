@@ -10,6 +10,7 @@
 // quantities stay strings; nothing is converted to a JS number.
 import type {
   BBox,
+  CadAnnotation,
   DimensionMeasurement,
   DimensionType,
   DocumentInfo,
@@ -90,6 +91,8 @@ const ERROR_CODE = /^[A-Z][A-Z0-9_]{0,63}$/;
 const MEASUREMENT_ID = /^M[1-9][0-9]*$/;
 const FINDING_ID = /^F[1-9][0-9]*$/;
 const SHA256 = /^[0-9a-f]{64}$/;
+const SIGNED_DECIMAL = /^-?[0-9]{1,30}(\.[0-9]{1,30})?$/;
+const CAD_ID = /^C[1-9][0-9]*$/;
 const DECIMAL = /^[0-9]{1,30}(\.[0-9]{1,30})?$/;
 const MAX_ERROR_MESSAGE = 300;
 
@@ -125,6 +128,13 @@ export function readReport(value: unknown): InspectionReport {
     ),
     findings: list(o.findings, "findings").map((f, i) => readFinding(f, `findings[${i}]`)),
     summary: readSummary(o.summary, "summary"),
+    cad_annotations: list(o.cad_annotations, "cad_annotations").map((a, i) =>
+      readCadAnnotation(a, `cad_annotations[${i}]`),
+    ),
+    cad_unit_note:
+      o.cad_unit_note === undefined || o.cad_unit_note === null
+        ? null
+        : readSource(o.cad_unit_note, "cad_unit_note"),
     skipped_angled_lines: count(o.skipped_angled_lines, "skipped_angled_lines"),
     processing_time_ms: finite(o.processing_time_ms, "processing_time_ms", 0),
     disclaimer: str(o.disclaimer, "disclaimer"),
@@ -283,6 +293,34 @@ function readMeasurement(value: unknown, path: string): Measurement {
 function readUnrecognized(value: unknown, path: string): UnrecognizedAnnotation {
   const o = record(value, path);
   return { label: str(o.label, `${path}.label`), source: readSource(o.source, `${path}.source`) };
+}
+
+const CAD_KINDS = { linear: 1, diameter: 1, radius: 1, angle: 1 };
+const CAD_UNITS = { mm: 1, deg: 1 };
+const UNIT_SOURCES = { annotation: 1, drawing_note: 1, symbol: 1, none: 1 };
+
+function readCadAnnotation(value: unknown, path: string): CadAnnotation {
+  const o = record(value, path);
+  if (o.association !== "none") bad(`${path}.association`, "a CAD annotation is never associated");
+  const deviation = (v: unknown, p: string) => pattern(v, p, SIGNED_DECIMAL);
+  const optional = (v: unknown) => (v === undefined ? null : v);
+  return {
+    id: pattern(o.id, `${path}.id`, CAD_ID),
+    association: "none",
+    dimension_kind: nullable(o.dimension_kind, `${path}.dimension_kind`, (v, p) =>
+      oneOf(v, p, CAD_KINDS),
+    ),
+    nominal: nullable(o.nominal, `${path}.nominal`, decimal),
+    upper_deviation: nullable(optional(o.upper_deviation), `${path}.upper_deviation`, deviation),
+    lower_deviation: nullable(optional(o.lower_deviation), `${path}.lower_deviation`, deviation),
+    unit: nullable(optional(o.unit), `${path}.unit`, (v, p) => oneOf(v, p, CAD_UNITS)),
+    unit_source: oneOf(o.unit_source, `${path}.unit_source`, UNIT_SOURCES),
+    status: oneOf(o.status, `${path}.status`, EXTRACTION_STATUSES),
+    issues: list(o.issues, `${path}.issues`).map((issue, i) =>
+      oneOf(issue, `${path}.issues[${i}]`, EXTRACTION_ISSUES),
+    ),
+    source: readSource(o.source, `${path}.source`),
+  };
 }
 
 function readEvidence(value: unknown, path: string): EvidenceRef {

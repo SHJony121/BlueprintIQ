@@ -5,6 +5,7 @@ import type { SchemaDimensionMeasurement, SchemaMaterialAnnotation } from "./sch
 
 export type {
   SchemaBBox as BBox,
+  SchemaCadAnnotation as CadAnnotation,
   SchemaDimensionMeasurement as DimensionMeasurement,
   SchemaDimensionType as DimensionType,
   SchemaDocumentInfo as DocumentInfo,

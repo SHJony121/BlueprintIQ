@@ -33,5 +33,7 @@ def inspect_drawing(
         findings=findings,
         summary=FindingSummary.from_findings(findings),
         skipped_angled_lines=drawing.angled_text_lines,
+        cad_annotations=drawing.cad_annotations,
+        cad_unit_note=drawing.unit_note,
         processing_time_ms=(time.perf_counter() - started) * 1000.0,
     )

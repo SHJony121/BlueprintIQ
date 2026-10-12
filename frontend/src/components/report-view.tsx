@@ -3,6 +3,7 @@ import { AppliedRequirements } from "./applied-requirements";
 import { DocumentPanel } from "./document-panel";
 import { IncompleteExtraction } from "./incomplete-extraction";
 import { FindingsList, type FindingLocation } from "./findings-list";
+import { CadAnnotationList } from "./cad-annotation-list";
 import { MeasurementList, UnrecognizedList } from "./measurement-list";
 import { SummaryCards } from "./summary-cards";
 
@@ -31,6 +32,7 @@ export function ReportView({
         locations={locations}
       />
       <MeasurementList measurements={report.measurements} />
+      <CadAnnotationList annotations={report.cad_annotations} unitNote={report.cad_unit_note ?? null} />
       <UnrecognizedList annotations={report.unrecognized_annotations} />
       <DocumentPanel report={report} />
     </div>

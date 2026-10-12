@@ -66,3 +66,14 @@ test("invalid values keep the run disabled and nothing is sent", async ({ page }
   await expect(page.getByRole("button", { name: "Run inspection" })).toBeDisabled();
   expect(requests).toBe(0);
 });
+
+test("CAD annotations are listed apart from the findings and never become pass or fail", async ({ page }) => {
+  await page.goto(BASE());
+  await page.setInputFiles("input[type=file]", path.resolve(process.cwd(), "tests/fixtures/cad_dimensions.pdf"));
+  await expect(page.getByRole("status")).toHaveText(/^Inspection complete/);
+  const section = page.getByTestId("cad-annotations");
+  await expect(section).toContainText("2.7 ±0.1");
+  await expect(section).toContainText("Not understood");
+  await expect(section).toContainText("never produce a pass or fail");
+  await expect(page.getByTestId("summary-pass")).toContainText("1"); // the labeled material only
+});
