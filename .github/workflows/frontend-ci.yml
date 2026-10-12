@@ -1,0 +1,46 @@
+name: frontend-ci
+
+on:
+  push:
+    branches: [main, "feat/**"]
+    paths: ["frontend/**", ".github/workflows/frontend-ci.yml"]
+  pull_request:
+    paths: ["frontend/**", ".github/workflows/frontend-ci.yml"]
+
+permissions:
+  contents: read
+
+env:
+  NEXT_TELEMETRY_DISABLED: "1"
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24 # pdfjs-dist requires Node >= 22.13 or >= 24
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies (locked)
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Type check
+        run: npm run typecheck
+
+      - name: Build
+        run: npm run build
+
+      # Production dependencies only: the remaining advisories are in the ESLint plugin's
+      # dev-only glob chain (see docs/frontend-f0.md) and never ship.
+      - name: Audit production dependencies
+        run: npm audit --omit=dev --audit-level=high
