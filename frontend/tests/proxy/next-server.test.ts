@@ -159,11 +159,26 @@ describe("upload size against the real server", () => {
       await client.write("\r\n");
     }
     const response = await client.response();
-    expect(response.status).toBe(413);
-    expect(JSON.parse(response.body).error.code).toBe("FILE_TOO_LARGE");
+    if (response.status === 413) {
+      expect(JSON.parse(response.body).error.code).toBe("FILE_TOO_LARGE");
+    } else {
+      // The server answers 413 and closes while the browser is still sending. Closing a
+      // socket that still has unread input makes the operating system reset the
+      // connection, and a reset can discard the answer before the client reads it. That
+      // is transport behaviour, not a proxy defect, so a missing answer is accepted only
+      // when the client saw nothing at all (no 2xx and no other status) and the broken
+      // connection is the reset itself. Enforcement is still proved below, from what
+      // reached the backend.
+      expect(client.received()).toBe("");
+      expect(["ECONNRESET", "EPIPE"]).toContain(client.failure());
+      console.info(`chunked upload: answer lost to ${client.failure()} (reset while sending)`);
+    }
     const forwarded = requestsSince(before);
     await eventually(() => upstream.openConnections() === 0);
     expect(forwarded.every((r) => !r.completed && r.body.length <= MAX_UPLOAD_BYTES)).toBe(true);
+    // The proxy itself survived and still answers.
+    const alive = await fetch(`http://127.0.0.1:${next.port}/api/inspections`);
+    expect(alive.status).toBe(405);
   });
 
   it("forwards only the declared bytes when more follow (pipelined request smuggling)", async () => {
