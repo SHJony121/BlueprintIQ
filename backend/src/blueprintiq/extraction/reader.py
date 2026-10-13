@@ -21,6 +21,7 @@ from blueprintiq.domain.models import (
 )
 from blueprintiq.extraction.annotation_parser import parse_lines
 from blueprintiq.extraction.cad_annotations import parse_cad_annotations
+from blueprintiq.extraction.material_association import associate_materials
 from blueprintiq.extraction.text_layer import extract_page_text
 from blueprintiq.ingestion.errors import (
     InvalidPdfError,
@@ -121,6 +122,7 @@ def read_drawing(
     """Read one drawing: validated document info plus parsed annotations with evidence."""
     text = extract_text(data, limits=limits)
     parsed = parse_lines(text.lines, method=ExtractionMethod.PDF_TEXT_LAYER)
+    measurements = associate_materials(text.lines, parsed.measurements, text.pages)
     cad, unit_note = parse_cad_annotations(text.lines)
     document = DocumentInfo(
         filename=_display_name(filename),
@@ -131,7 +133,7 @@ def read_drawing(
     )
     return DrawingExtraction(
         document=document,
-        measurements=parsed.measurements,
+        measurements=measurements,
         unrecognized_annotations=parsed.unrecognized,
         text_lines=len(text.lines),
         hidden_text_lines=text.hidden_lines,

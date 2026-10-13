@@ -155,6 +155,9 @@ class UnitSource(StrEnum):
 
 class ExtractionMethod(StrEnum):
     PDF_TEXT_LAYER = "pdf_text_layer"
+    # The value is verbatim PDF text on its own line, tied to a label on another line
+    # (see MaterialAnnotation.label_source) by position. No joined line is invented.
+    PDF_TEXT_LAYER_ROW_ASSOCIATION = "pdf_text_layer_row_association"
 
 
 class FindingStatus(StrEnum):
@@ -288,6 +291,9 @@ class MaterialAnnotation(_Frozen):
     status: ExtractionStatus
     issues: tuple[ExtractionIssue, ...] = ()
     source: SourceEvidence
+    # Only for a value found on the same row to the right of its label: the label line,
+    # verbatim. ``source`` is then the value line.
+    label_source: SourceEvidence | None = None
 
     @field_validator("value", mode="before")
     @classmethod
@@ -303,6 +309,11 @@ class MaterialAnnotation(_Frozen):
     @model_validator(mode="after")
     def _consistent(self) -> Self:
         _check_status_and_issues(self.status, self.issues, "material")
+        associated = (
+            self.source.extraction_method is ExtractionMethod.PDF_TEXT_LAYER_ROW_ASSOCIATION
+        )
+        if associated != (self.label_source is not None):
+            raise ValueError("a row-associated material needs its label source, and only it")
         if self.status is ExtractionStatus.PARSED and self.value is None:
             raise ValueError("a parsed material requires a value")
         if self.status is ExtractionStatus.AMBIGUOUS and self.value is not None:
@@ -483,6 +494,11 @@ def _check_evidence_against_pages(
     """Every evidence page must exist and every box must lie on its page."""
     pages = {p.page_number: p for p in document.pages}
     sources = [(f"measurement {m.id}", m.source) for m in measurements]
+    sources += [
+        (f"label of measurement {m.id}", m.label_source)
+        for m in measurements
+        if isinstance(m, MaterialAnnotation) and m.label_source is not None
+    ]
     sources += [(f"annotation {a.label}", a.source) for a in unrecognized]
     sources += [(f"CAD annotation {a.id}", a.source) for a in cad]
     if unit_note is not None:
