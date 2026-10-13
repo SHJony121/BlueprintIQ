@@ -14,10 +14,10 @@ Everything is in page space, the space of the text boxes. A verified association
 statement about the drawing's graphics. It is not a measurement and no rule uses it.
 """
 
+import itertools
 import math
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
-from itertools import combinations
 
 from blueprintiq.domain.models import (
     AssociationRelation,
@@ -36,11 +36,13 @@ from blueprintiq.extraction.vector_geometry import (
     LineRun,
     Point,
     Scene,
+    Segment,
     point_to_line,
     point_to_segment,
 )
 
 TOUCH = 0.2  # points: a terminator "on" a line or curve (PDF coordinates are exact to ~0.01)
+OVERSHOOT = 8.0  # an extension line starts within this of its dimension line
 EDGE_TOUCH = 0.75  # an extension line's far end "on" a geometry edge
 PERPENDICULAR = math.sin(math.radians(1.0))  # |cos| of the angle between perpendicular lines
 ALIGNED = math.cos(math.radians(8.0))  # |cos| for "along" a line
@@ -56,6 +58,7 @@ class _Terminator:
     tip: Point
     kind: str  # "arrow" or "dot"
     direction: Point | None  # arrows only
+    paths: frozenset[int] = frozenset()  # the drawing paths it was found in
 
     def element(self) -> GeometryElement:
         return GeometryElement(role=self.kind, shape="point", coords=self.tip)
@@ -64,8 +67,10 @@ class _Terminator:
 @dataclass(frozen=True, slots=True)
 class _Structure:
     dim: LineRun
-    ends: tuple[_Terminator, _Terminator]
+    ends: tuple[_Terminator, _Terminator]  # in order along the dimension line
     refs: tuple[LineRun, LineRun]
+    first: bool  # the pair starts at the first terminator of the line
+    last: bool  # and/or ends at the last one
 
 
 def associate_features(
@@ -100,10 +105,17 @@ class _Builder:
         self.scene = scene
         self.boxes = boxes
         self.runs = [r for r in scene.runs if r.length >= 3.0]
-        self.terminators = [
-            *(_Terminator(a.tip, "arrow", a.direction) for a in scene.arrows),
-            *(_Terminator(d.centre, "dot", None) for d in scene.dots),
-        ]
+        self.terminators = _dedupe_terminators(
+            [
+                *(
+                    _Terminator(a.tip, "arrow", a.direction, frozenset({a.path}))
+                    for a in scene.arrows
+                ),
+                *(_Terminator(d.centre, "dot", None, frozenset({d.path})) for d in scene.dots),
+            ]
+        )
+        # Paths that hold a terminator are dimension graphics, never part edges.
+        self.dimension_paths = {a.path for a in scene.arrows} | {d.path for d in scene.dots}
         self.circles = _dedupe_circles(scene.circles)
         self.feature_ids: dict[tuple[object, ...], str] = {}
         self._structures: list[_Structure] | None = None
@@ -335,18 +347,23 @@ class _Builder:
         return self._structures
 
     def _find_structures(self) -> list[_Structure]:
+        """Neighbouring terminators on a dimension line, each on its own extension line."""
         found: list[_Structure] = []
         for dim in self.runs:
-            ons = [t for t in self.terminators if self._on_dimension_line(t, dim)]
-            for t1, t2 in combinations(ons, 2):
+            ux, uy = dim.direction
+            ons = sorted(
+                (t for t in self.terminators if self._on_dimension_line(t, dim)),
+                key=lambda t: t.tip[0] * ux + t.tip[1] * uy,
+            )
+            for i, (t1, t2) in enumerate(itertools.pairwise(ons)):
                 if math.dist(t1.tip, t2.tip) <= 1.0:
                     continue
-                refs1 = self._reference_lines(t1, dim)
-                refs2 = self._reference_lines(t2, dim)
-                for e1 in refs1:
-                    for e2 in refs2:
+                for e1 in self._reference_lines(t1, dim):
+                    for e2 in self._reference_lines(t2, dim):
                         if e1 is not e2:
-                            found.append(_Structure(dim, (t1, t2), (e1, e2)))
+                            found.append(
+                                _Structure(dim, (t1, t2), (e1, e2), i == 0, i == len(ons) - 2)
+                            )
         return found
 
     @staticmethod
@@ -372,6 +389,73 @@ class _Builder:
             and point_to_segment(t.tip, r.p0, r.p1) <= TOUCH
         ]
 
+    def _assign(self, structures: list[_Structure], rect: Rect) -> tuple[int, _Structure] | None:
+        """The pair on one dimension line a text belongs to, with how strong the evidence is.
+
+        Inside the span of exactly one pair: that pair (strength 2). Beyond the first or last
+        terminator, on the continuation of the same drawn line: the end pair (strength 1).
+        ``None`` if it cannot be told.
+        """
+        distinct = {(id(s.dim), id(s.refs[0]), id(s.refs[1])): s for s in structures}
+        pairs = list(distinct.values())
+        if not pairs:
+            return None
+        ux, uy = pairs[0].dim.direction
+        centre = ((rect[0] + rect[2]) / 2, (rect[1] + rect[3]) / 2)
+        pos = centre[0] * ux + centre[1] * uy
+
+        def span(s: _Structure) -> tuple[float, float]:
+            a0 = s.ends[0].tip[0] * ux + s.ends[0].tip[1] * uy
+            a1 = s.ends[1].tip[0] * ux + s.ends[1].tip[1] * uy
+            return min(a0, a1), max(a0, a1)
+
+        inside = [s for s in pairs if span(s)[0] <= pos <= span(s)[1]]
+        if len(inside) == 1:
+            return 2, inside[0]
+        if len(inside) > 1:
+            return None
+        # Beyond the first or last terminator of the line, on the stretch of the same drawn
+        # line (no other terminator lies between), the text belongs to the end pair. This is
+        # how a dimension too small for its text is drawn: the line carries on to the text.
+        run_lo = min(
+            a
+            for a in (
+                pairs[0].dim.p0[0] * ux + pairs[0].dim.p0[1] * uy,
+                pairs[0].dim.p1[0] * ux + pairs[0].dim.p1[1] * uy,
+            )
+        )
+        run_hi = max(
+            a
+            for a in (
+                pairs[0].dim.p0[0] * ux + pairs[0].dim.p0[1] * uy,
+                pairs[0].dim.p1[0] * ux + pairs[0].dim.p1[1] * uy,
+            )
+        )
+        outside = [
+            s
+            for s in pairs
+            if (s.first and run_lo <= pos < span(s)[0]) or (s.last and span(s)[1] < pos <= run_hi)
+        ]
+        if len(outside) == 1:
+            return 1, outside[0]
+        return None
+
+    def _best(self, runs: list[LineRun], rect: Rect) -> list[_Structure]:
+        """The distinct pairs the text belongs to over the nearby lines, strongest evidence only.
+
+        A text between a pair's terminators is explained by that pair, so it outranks being on
+        the continuation of some other pair's line.
+        """
+        found = [
+            r
+            for run in runs
+            if (r := self._assign([s for s in self.structures() if s.dim is run], rect)) is not None
+        ]
+        if not found:
+            return []
+        top = max(strength for strength, _ in found)
+        return _distinct_pairs([s for strength, s in found if strength == top])
+
     def _linear(self, a: CadAnnotation, rect: Rect, result: ResultFn) -> FeatureAssociation:
         relation = AssociationRelation.LINEAR_BETWEEN_REFERENCES
         gap = max(1.5, 0.25 * min(rect[2] - rect[0], rect[3] - rect[1]))
@@ -382,7 +466,8 @@ class _Builder:
                 relation,
                 "Association unresolved: no dimension line passes the text.",
             )
-        mine = [s for s in self.structures() if any(s.dim is d for d in near_dims)]
+        on_runs = {id(d): [s for s in self.structures() if s.dim is d] for d in near_dims}
+        mine = [s for group in on_runs.values() for s in group]
         if not mine:
             return result(
                 AssociationStatus.UNRESOLVED,
@@ -391,27 +476,42 @@ class _Builder:
                 "on two parallel extension lines.",
                 candidates=len(near_dims),
             )
-        chosen = _choose(mine, rect)
-        if chosen is None:
+        unique = self._best(near_dims, rect)
+        if len(unique) != 1:
+            why = (
+                f"{len(unique)} dimension structures fit the text equally, so none is chosen"
+                if unique
+                else "the text lies between the terminators of no pair and not beside an outward "
+                "arrowhead at the end of a dimension line, so none is chosen"
+            )
             return result(
                 AssociationStatus.UNRESOLVED,
                 relation,
-                f"Association unresolved: {len(mine)} dimension structures fit the text equally, so none "
-                "is chosen.",
-                candidates=len(mine),
+                f"Association unresolved: {why}.",
+                candidates=len(_distinct_pairs(mine)),
             )
+        chosen = unique[0]
         if self._text_shared(chosen, a):
             return result(
                 AssociationStatus.UNRESOLVED,
                 relation,
-                "Association unresolved: another dimension text lies on the same dimension line.",
-                candidates=len(mine),
+                "Association unresolved: another dimension text belongs to the same pair of terminators.",
+                candidates=len(unique),
             )
-        refs = [_line_element("extension_line", r) for r in chosen.refs]
-        edges = [e for r in chosen.refs if (e := self._touching_edge(r, chosen)) is not None]
+        refs: list[GeometryElement] = []
+        edges: list[GeometryElement] = []
+        for ref, end in zip(chosen.refs, chosen.ends, strict=True):
+            segments = _segments_at(ref, end) or list(ref.segments)
+            refs += [_segment_element("extension_line", seg) for seg in segments]
+            if (edge := self._touching_edge(segments, chosen)) is not None:
+                edges.append(edge)
         evidence = (
             _box_element(rect),
-            _line_element("dimension_line", chosen.dim),
+            GeometryElement(
+                role="dimension_line",
+                shape="line",
+                coords=(*chosen.ends[0].tip, *chosen.ends[1].tip),
+            ),
             *(t.element() for t in chosen.ends),
         )
         span = math.dist(chosen.ends[0].tip, chosen.ends[1].tip)
@@ -432,50 +532,111 @@ class _Builder:
         )
 
     def _text_shared(self, chosen: _Structure, a: CadAnnotation) -> bool:
-        """Another dimension text beside the same dimension line makes the pairing ambiguous."""
-        return any(
-            other != a.id
-            and _run_rect_distance(chosen.dim, rect)
-            <= max(1.5, 0.25 * min(rect[2] - rect[0], rect[3] - rect[1]))
-            for other, rect in self.boxes
-        )
+        """Is another dimension text assigned to the same pair on the same dimension line?"""
+        for other, rect in self.boxes:
+            if other == a.id:
+                continue
+            gap = max(1.5, 0.25 * min(rect[2] - rect[0], rect[3] - rect[1]))
+            near = [r for r in self.runs if _run_rect_distance(r, rect) <= gap]
+            if any(_same_pair(t, chosen) for t in self._best(near, rect)):
+                return True
+        return False
 
-    def _touching_edge(self, ref: LineRun, chosen: _Structure) -> GeometryElement | None:
-        near_end = min(
-            (ref.p0, ref.p1), key=lambda p: point_to_segment(p, chosen.dim.p0, chosen.dim.p1)
-        )
-        far = ref.p1 if near_end is ref.p0 else ref.p0
-        hits = [
-            r
-            for r in self.runs
-            if r is not ref
-            and r is not chosen.dim
-            and r not in chosen.refs
-            and abs(r.direction[0] * ref.direction[0] + r.direction[1] * ref.direction[1]) < ALIGNED
-            and point_to_segment(far, r.p0, r.p1) <= EDGE_TOUCH
-        ]
-        return _line_element("reference_edge", hits[0]) if len(hits) == 1 else None
+    def _touching_edge(self, segments: list[Segment], chosen: _Structure) -> GeometryElement | None:
+        """The one drawn segment an extension line ends on, if exactly one does."""
+        dim = chosen.dim
+        points = [p for seg in segments for p in (seg.p0, seg.p1)]
+        far = max(points, key=lambda p: point_to_line(p, dim.p0, dim.p1))
+        own = {id(seg) for seg in segments}
+        ref_dir = (segments[0].p1[0] - segments[0].p0[0], segments[0].p1[1] - segments[0].p0[1])
+        norm = math.hypot(*ref_dir) or 1.0
+        hits = []
+        for seg in self.scene.segments:
+            if id(seg) in own or seg.path in self.dimension_paths or seg.length == 0:
+                continue
+            along = abs(
+                ((seg.p1[0] - seg.p0[0]) * ref_dir[0] + (seg.p1[1] - seg.p0[1]) * ref_dir[1])
+                / (seg.length * norm)
+            )
+            if along < ALIGNED and point_to_segment(far, seg.p0, seg.p1) <= EDGE_TOUCH:
+                hits.append(seg)
+        return _segment_element("reference_edge", hits[0]) if len(hits) == 1 else None
 
 
 # ---------------------------------------------------------------------- helpers
 
 
-def _choose(structures: list[_Structure], rect: Rect) -> _Structure | None:
-    """The one structure the text belongs to, or ``None`` if it cannot be told."""
-    unique = {(id(s.dim), id(s.refs[0]), id(s.refs[1])): s for s in structures}.values()
-    candidates = list(unique)
-    if len(candidates) == 1:
-        return candidates[0]
-    centre = ((rect[0] + rect[2]) / 2, (rect[1] + rect[3]) / 2)
-    inside = []
-    for s in candidates:
-        d = s.dim.direction
-        a0 = s.ends[0].tip[0] * d[0] + s.ends[0].tip[1] * d[1]
-        a1 = s.ends[1].tip[0] * d[0] + s.ends[1].tip[1] * d[1]
-        pos = centre[0] * d[0] + centre[1] * d[1]
-        if min(a0, a1) <= pos <= max(a0, a1):
-            inside.append(s)
-    return inside[0] if len(inside) == 1 else None
+def _same_pair(a: _Structure, b: _Structure) -> bool:
+    """The same two terminator positions (within 0.25 pt), whichever way round."""
+    straight = (
+        math.dist(a.ends[0].tip, b.ends[0].tip) <= 0.25
+        and math.dist(a.ends[1].tip, b.ends[1].tip) <= 0.25
+    )
+    crossed = (
+        math.dist(a.ends[0].tip, b.ends[1].tip) <= 0.25
+        and math.dist(a.ends[1].tip, b.ends[0].tip) <= 0.25
+    )
+    return straight or crossed
+
+
+def _distinct_pairs(pairs: list[_Structure]) -> list[_Structure]:
+    out: list[_Structure] = []
+    for s in pairs:
+        if not any(_same_pair(s, o) for o in out):
+            out.append(s)
+    return out
+
+
+def _dedupe_terminators(terminators: list[_Terminator]) -> list[_Terminator]:
+    """Drop terminators drawn twice at the same place (same kind, same way round)."""
+    out: list[_Terminator] = []
+    for t in terminators:
+        for k, o in enumerate(out):
+            if (
+                o.kind == t.kind
+                and math.dist(o.tip, t.tip) <= 0.25
+                and (
+                    t.direction is None
+                    or o.direction is None
+                    or o.direction[0] * t.direction[0] + o.direction[1] * t.direction[1] >= 0.99
+                )
+            ):
+                out[k] = _Terminator(o.tip, o.kind, o.direction, o.paths | t.paths)
+                break
+        else:
+            out.append(t)
+    return out
+
+
+def _segments_at(run: LineRun, end: _Terminator) -> list[Segment]:
+    """The drawn segments that are this terminator's extension line (not the whole merged line).
+
+    An extension line starts at the dimension line (it may overshoot it by a few points), so
+    a segment only passing through the point, far from both its ends, belongs to some other
+    dimension's collinear line and is left out. Among the rest, segments drawn in the
+    terminator's own path win. Duplicates drawn within 0.3 pt of each other are dropped.
+    """
+    on = [seg for seg in run.segments if point_to_segment(end.tip, seg.p0, seg.p1) <= TOUCH]
+    near = [
+        seg
+        for seg in on
+        if min(math.dist(end.tip, seg.p0), math.dist(end.tip, seg.p1)) <= OVERSHOOT
+    ]
+    pool = near or on
+    chosen = [seg for seg in pool if seg.path in end.paths] or pool
+    unique: list[Segment] = []
+    for seg in chosen:
+        if not any(
+            (math.dist(seg.p0, o.p0) <= 0.3 and math.dist(seg.p1, o.p1) <= 0.3)
+            or (math.dist(seg.p0, o.p1) <= 0.3 and math.dist(seg.p1, o.p0) <= 0.3)
+            for o in unique
+        ):
+            unique.append(seg)
+    return unique
+
+
+def _segment_element(role: GeometryRole, seg: Segment) -> GeometryElement:
+    return GeometryElement(role=role, shape="line", coords=(*seg.p0, *seg.p1))
 
 
 def _dedupe_circles(circles: Sequence[Circle]) -> list[Circle]:

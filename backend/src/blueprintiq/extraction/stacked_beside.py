@@ -98,11 +98,23 @@ def reconstruct_stacked_beside(
     if not candidates:
         return tuple(annotations)
 
+    # First, which candidates have exactly one upper line that fits by position alone. The two
+    # lines of such a stack belong to it, so they are not unrelated text for a neighbouring
+    # stack. A second pass then applies the full check, with only truly unrelated text counting
+    # as crowding.
+    provisional: dict[int, TextLine] = {}
+    for index, (line, words) in enumerate(candidates):
+        found = _upper_for(line, words, lines, check_crowd=False)
+        if found is not None:
+            provisional[index] = found
+    members = {index: (id(candidates[index][0]), id(upper)) for index, upper in provisional.items()}
+
     # The upper line each candidate could use, and how many candidates want each upper line.
     chosen: dict[int, TextLine] = {}
     wanted: dict[int, int] = {}
     for index, (line, words) in enumerate(candidates):
-        upper = _upper_for(line, words, lines)
+        theirs = {i for other, ids in members.items() if other != index for i in ids}
+        upper = _upper_for(line, words, lines, ignore=theirs)
         if upper is not None:
             chosen[index] = upper
             wanted[id(upper)] = wanted.get(id(upper), 0) + 1
@@ -152,7 +164,12 @@ def _two_words(line: TextLine) -> tuple[TextWord, TextWord] | None:
 
 
 def _upper_for(
-    line: TextLine, words: tuple[TextWord, TextWord], lines: Sequence[TextLine]
+    line: TextLine,
+    words: tuple[TextWord, TextWord],
+    lines: Sequence[TextLine],
+    *,
+    check_crowd: bool = True,
+    ignore: set[int] | None = None,
 ) -> TextLine | None:
     """The one line above the lower deviation that fits, or ``None`` if none or not exactly one."""
     assert line.bbox is not None
@@ -169,7 +186,10 @@ def _upper_for(
         frame = _frame(other.bbox, line.writing)
         lift = frame.centre - whole.centre
         away = abs(frame.a0 - low_digits.a0)
-        if 0 < lift <= NEARBY * height and away <= NEARBY * height:
+        # Only a line that could itself be an upper deviation competes for the place; the text of
+        # a neighbouring dimension is not a rival fragment (the area check still sees it).
+        could_be_upper = len(other.words) == 1 and _UPPER.fullmatch(other.words[0].text)
+        if could_be_upper and 0 < lift <= NEARBY * height and away <= NEARBY * height:
             near.append((other, frame))
     if len(near) != 1:
         return None
@@ -184,22 +204,30 @@ def _upper_for(
         return None
     if upper.words[0].text == "0" and low.text == "0":
         return None  # no tolerance at all
-    if _crowded(line, whole, upper, frame, lines):
+    if check_crowd and _crowded(line, whole, upper, frame, lines, ignore or set()):
         return None
     return upper
 
 
 def _crowded(
-    line: TextLine, whole: _Frame, upper: TextLine, frame: _Frame, lines: Sequence[TextLine]
+    line: TextLine,
+    whole: _Frame,
+    upper: TextLine,
+    frame: _Frame,
+    lines: Sequence[TextLine],
+    ignore: set[int],
 ) -> bool:
-    """Any other text in the area around the value, the lower deviation and the upper line."""
+    """Any other text in the area around the value, the lower deviation and the upper line.
+
+    Lines in ``ignore`` are the lines of neighbouring stacks that are complete in themselves.
+    """
     height = whole.height
     a0 = min(whole.a0, frame.a0) - SIDE * height
     a1 = max(whole.a1, frame.a1) + SIDE * height
     u0 = min(whole.u0, frame.u0) - MARGIN * height
     u1 = max(whole.u1, frame.u1) + MARGIN * height
     for other in lines:
-        if other is line or other is upper or other.bbox is None:
+        if other is line or other is upper or other.bbox is None or id(other) in ignore:
             continue
         if other.page_number != line.page_number:
             continue

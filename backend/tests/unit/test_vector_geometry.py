@@ -99,3 +99,13 @@ def test_coordinates_are_page_space_on_a_rotated_page() -> None:
     (run,) = sc.runs
     assert run.length == pytest.approx(200, abs=0.01)
     assert {round(run.p0[1]), round(run.p1[1])} == {50}  # unrotated page space, as for text
+
+
+def test_a_merged_run_remembers_the_segments_it_was_made_from() -> None:
+    sc = scene(Shape("line", (10, 50, 40, 50)), Shape("line", (40, 50, 90, 50)))
+    (run,) = sc.runs
+    assert run.members == 2 and len(run.segments) == 2
+    ends = sorted(
+        (round(min(s.p0[0], s.p1[0])), round(max(s.p0[0], s.p1[0]))) for s in run.segments
+    )
+    assert ends == [(10, 40), (40, 90)]  # exact endpoints, not the merged 10-90

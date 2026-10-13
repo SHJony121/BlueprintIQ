@@ -111,6 +111,9 @@ class LineRun:
     p1: Point
     direction: Point  # unit vector p0 -> p1
     members: int
+    # The drawn segments the run was merged from, so evidence can name exactly the ones
+    # that support an association instead of the whole merged line.
+    segments: tuple[Segment, ...] = ()
 
     @property
     def length(self) -> float:
@@ -453,6 +456,9 @@ def merge_runs(segments: Sequence[Segment]) -> list[LineRun]:
     return runs
 
 
+_Row = tuple[float, float, float, Segment]  # offset, start and end along the run, segment
+
+
 def _merge_angle_group(group: Sequence[tuple[float, Segment]]) -> list[LineRun]:
     angle = group[0][0]
     ux, uy = math.cos(angle), math.sin(angle)
@@ -462,10 +468,10 @@ def _merge_angle_group(group: Sequence[tuple[float, Segment]]) -> list[LineRun]:
         offset = s.p0[0] * nx + s.p0[1] * ny
         a0 = s.p0[0] * ux + s.p0[1] * uy
         a1 = s.p1[0] * ux + s.p1[1] * uy
-        rows.append((offset, min(a0, a1), max(a0, a1)))
-    rows.sort()
+        rows.append((offset, min(a0, a1), max(a0, a1), s))
+    rows.sort(key=lambda r: (r[0], r[1], r[2]))
     runs: list[LineRun] = []
-    batch: list[tuple[float, float, float]] = []
+    batch: list[_Row] = []
     for row in rows:
         if batch and row[0] - batch[0][0] > RUN_OFFSET_TOL:
             runs.extend(_merge_intervals(batch, ux, uy, nx, ny))
@@ -477,29 +483,36 @@ def _merge_angle_group(group: Sequence[tuple[float, Segment]]) -> list[LineRun]:
 
 
 def _merge_intervals(
-    batch: list[tuple[float, float, float]], ux: float, uy: float, nx: float, ny: float
+    batch: list[_Row], ux: float, uy: float, nx: float, ny: float
 ) -> list[LineRun]:
     offset = sum(b[0] for b in batch) / len(batch)
     batch = sorted(batch, key=lambda b: b[1])
     runs: list[LineRun] = []
-    lo, hi, count = batch[0][1], batch[0][2], 1
-    for _, a0, a1 in batch[1:]:
+    lo, hi, members = batch[0][1], batch[0][2], [batch[0][3]]
+    for _, a0, a1, seg in batch[1:]:
         if a0 <= hi + JOIN_TOL:
             hi = max(hi, a1)
-            count += 1
+            members.append(seg)
         else:
-            runs.append(_run(lo, hi, offset, ux, uy, nx, ny, count))
-            lo, hi, count = a0, a1, 1
-    runs.append(_run(lo, hi, offset, ux, uy, nx, ny, count))
+            runs.append(_run(lo, hi, offset, ux, uy, nx, ny, members))
+            lo, hi, members = a0, a1, [seg]
+    runs.append(_run(lo, hi, offset, ux, uy, nx, ny, members))
     return runs
 
 
 def _run(
-    lo: float, hi: float, offset: float, ux: float, uy: float, nx: float, ny: float, count: int
+    lo: float,
+    hi: float,
+    offset: float,
+    ux: float,
+    uy: float,
+    nx: float,
+    ny: float,
+    members: list[Segment],
 ) -> LineRun:
     p0 = (lo * ux + offset * nx, lo * uy + offset * ny)
     p1 = (hi * ux + offset * nx, hi * uy + offset * ny)
-    return LineRun(p0, p1, (ux, uy), count)
+    return LineRun(p0, p1, (ux, uy), len(members), tuple(members))
 
 
 def point_to_segment(p: Point, a: Point, b: Point) -> float:
