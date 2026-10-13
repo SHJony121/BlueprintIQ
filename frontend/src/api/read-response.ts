@@ -11,6 +11,9 @@
 import type {
   BBox,
   CadAnnotation,
+  FeatureAssociation,
+  GeometryElement,
+  GeometrySummary,
   DimensionMeasurement,
   DimensionType,
   DocumentInfo,
@@ -135,6 +138,13 @@ export function readReport(value: unknown): InspectionReport {
       o.cad_unit_note === undefined || o.cad_unit_note === null
         ? null
         : readSource(o.cad_unit_note, "cad_unit_note"),
+    feature_associations: list(o.feature_associations, "feature_associations").map((a, i) =>
+      readAssociation(a, `feature_associations[${i}]`),
+    ),
+    geometry_summary:
+      o.geometry_summary === undefined || o.geometry_summary === null
+        ? null
+        : readGeometrySummary(o.geometry_summary, "geometry_summary"),
     skipped_angled_lines: count(o.skipped_angled_lines, "skipped_angled_lines"),
     processing_time_ms: finite(o.processing_time_ms, "processing_time_ms", 0),
     disclaimer: str(o.disclaimer, "disclaimer"),
@@ -145,6 +155,13 @@ export function readReport(value: unknown): InspectionReport {
 
 /** Relationships the UI relies on: unique ids, resolvable references, honest totals. */
 function crossCheck(report: InspectionReport): void {
+  const cadIds = new Set(report.cad_annotations.map((a) => a.id));
+  const seen = new Set<string>();
+  for (const a of report.feature_associations) {
+    if (!cadIds.has(a.annotation_id)) bad("feature_associations", `${a.id} names an unknown CAD annotation`);
+    if (seen.has(a.annotation_id)) bad("feature_associations", `more than one association for ${a.annotation_id}`);
+    seen.add(a.annotation_id);
+  }
   const measurementIds = new Set<string>();
   for (const m of report.measurements) {
     if (measurementIds.has(m.id)) bad("measurements", `duplicate id ${m.id}`);
@@ -303,6 +320,72 @@ function readMeasurement(value: unknown, path: string): Measurement {
 function readUnrecognized(value: unknown, path: string): UnrecognizedAnnotation {
   const o = record(value, path);
   return { label: str(o.label, `${path}.label`), source: readSource(o.source, `${path}.source`) };
+}
+
+const ASSOCIATION_ID = /^A[1-9][0-9]*$/;
+const FEATURE_ID = /^G[1-9][0-9]*$/;
+const RELATIONS = { diameter_of_circle: 1, radius_of_arc: 1, linear_between_references: 1 };
+const ASSOCIATION_STATUSES = { verified: 1, unresolved: 1, unsupported: 1 };
+const GEOMETRY_ROLES = {
+  text: 1,
+  leader: 1,
+  dimension_line: 1,
+  extension_line: 1,
+  arrow: 1,
+  dot: 1,
+  circle: 1,
+  arc: 1,
+  reference_edge: 1,
+};
+const GEOMETRY_SHAPES = { line: 4, circle: 3, arc: 5, point: 2, box: 4 };
+
+function readGeometryElement(value: unknown, path: string): GeometryElement {
+  const o = record(value, path);
+  const shape = oneOf(o.shape, `${path}.shape`, GEOMETRY_SHAPES);
+  const coords = list(o.coords, `${path}.coords`).map((c, i) => finite(c, `${path}.coords[${i}]`));
+  if (coords.length !== GEOMETRY_SHAPES[shape]) bad(`${path}.coords`, "wrong number of coordinates");
+  return { role: oneOf(o.role, `${path}.role`, GEOMETRY_ROLES), shape, coords };
+}
+
+function readAssociation(value: unknown, path: string): FeatureAssociation {
+  const o = record(value, path);
+  const status = oneOf(o.status, `${path}.status`, ASSOCIATION_STATUSES);
+  const feature = list(o.feature, `${path}.feature`).map((e, i) => readGeometryElement(e, `${path}.feature[${i}]`));
+  const evidence = list(o.evidence, `${path}.evidence`).map((e, i) => readGeometryElement(e, `${path}.evidence[${i}]`));
+  const featureId =
+    o.feature_id === undefined || o.feature_id === null ? null : pattern(o.feature_id, `${path}.feature_id`, FEATURE_ID);
+  const relation = nullable(o.relation, `${path}.relation`, (v, p) => oneOf(v, p, RELATIONS));
+  // Only a verified association names a feature; nothing unverified may look like one.
+  if ((status === "verified") !== (feature.length > 0 && featureId !== null && evidence.length > 0 && relation !== null)) {
+    bad(`${path}.status`, "an association is verified exactly when it carries its feature and evidence");
+  }
+  if (status !== "verified" && (feature.length > 0 || featureId !== null)) {
+    bad(`${path}.feature`, "only a verified association has a feature");
+  }
+  return {
+    id: pattern(o.id, `${path}.id`, ASSOCIATION_ID),
+    annotation_id: pattern(o.annotation_id, `${path}.annotation_id`, CAD_ID),
+    page_number: count(o.page_number, `${path}.page_number`, 1),
+    relation,
+    status,
+    feature_id: featureId,
+    feature,
+    evidence,
+    candidates: count(o.candidates, `${path}.candidates`),
+    explanation: str(o.explanation, `${path}.explanation`),
+  };
+}
+
+function readGeometrySummary(value: unknown, path: string): GeometrySummary {
+  const o = record(value, path);
+  return {
+    segments: count(o.segments, `${path}.segments`),
+    circles: count(o.circles, `${path}.circles`),
+    arcs: count(o.arcs, `${path}.arcs`),
+    arrows: count(o.arrows, `${path}.arrows`),
+    dots: count(o.dots, `${path}.dots`),
+    truncated: o.truncated === true,
+  };
 }
 
 const CAD_KINDS = { linear: 1, diameter: 1, radius: 1, angle: 1 };

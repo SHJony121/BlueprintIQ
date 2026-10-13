@@ -1,6 +1,25 @@
 {
   "components": {
     "schemas": {
+      "AssociationRelation": {
+        "description": "What a CAD annotation was tied to. Never a compliance claim.",
+        "enum": [
+          "diameter_of_circle",
+          "radius_of_arc",
+          "linear_between_references"
+        ],
+        "title": "AssociationRelation",
+        "type": "string"
+      },
+      "AssociationStatus": {
+        "enum": [
+          "verified",
+          "unresolved",
+          "unsupported"
+        ],
+        "title": "AssociationStatus",
+        "type": "string"
+      },
       "BBox": {
         "additionalProperties": false,
         "description": "Axis-aligned box in PyMuPDF page space (points, origin top-left, y down).",
@@ -407,6 +426,89 @@
         "title": "ExtractionStatus",
         "type": "string"
       },
+      "FeatureAssociation": {
+        "additionalProperties": false,
+        "description": "A CAD annotation tied to the vector geometry it refers to, with the evidence.\n\nOnly ``verified`` carries a feature. It is a statement about the drawing's geometry,\nnot about the part: nothing here is a measurement or a finding, and no rule uses it.\n``candidates`` counts the geometric candidates examined (it is not a probability).",
+        "properties": {
+          "annotation_id": {
+            "pattern": "^C[1-9][0-9]*$",
+            "title": "Annotation Id",
+            "type": "string"
+          },
+          "candidates": {
+            "default": 0,
+            "minimum": 0.0,
+            "title": "Candidates",
+            "type": "integer"
+          },
+          "evidence": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/GeometryElement"
+            },
+            "title": "Evidence",
+            "type": "array"
+          },
+          "explanation": {
+            "maxLength": 500,
+            "title": "Explanation",
+            "type": "string"
+          },
+          "feature": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/GeometryElement"
+            },
+            "title": "Feature",
+            "type": "array"
+          },
+          "feature_id": {
+            "anyOf": [
+              {
+                "pattern": "^G[1-9][0-9]*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Feature Id"
+          },
+          "id": {
+            "pattern": "^A[1-9][0-9]*$",
+            "title": "Id",
+            "type": "string"
+          },
+          "page_number": {
+            "minimum": 1.0,
+            "title": "Page Number",
+            "type": "integer"
+          },
+          "relation": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AssociationRelation"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "status": {
+            "$ref": "#/components/schemas/AssociationStatus"
+          }
+        },
+        "required": [
+          "id",
+          "annotation_id",
+          "page_number",
+          "relation",
+          "status",
+          "explanation"
+        ],
+        "title": "FeatureAssociation",
+        "type": "object"
+      },
       "Finding": {
         "additionalProperties": false,
         "description": "The outcome of one rule for one measurement or group of measurements.",
@@ -531,6 +633,97 @@
         "title": "FindingSummary",
         "type": "object"
       },
+      "GeometryElement": {
+        "additionalProperties": false,
+        "description": "One piece of vector geometry in page space (unrotated, origin top-left, points).\n\n``coords`` by shape: line ``x0 y0 x1 y1``; circle ``cx cy r``; arc ``cx cy r start\nsweep`` (angles in degrees in page space, measured from +x towards +y); point ``x y``;\nbox ``x0 y0 x1 y1``.",
+        "properties": {
+          "coords": {
+            "items": {
+              "type": "number"
+            },
+            "title": "Coords",
+            "type": "array"
+          },
+          "role": {
+            "enum": [
+              "text",
+              "leader",
+              "dimension_line",
+              "extension_line",
+              "arrow",
+              "dot",
+              "circle",
+              "arc",
+              "reference_edge"
+            ],
+            "title": "Role",
+            "type": "string"
+          },
+          "shape": {
+            "enum": [
+              "line",
+              "circle",
+              "arc",
+              "point",
+              "box"
+            ],
+            "title": "Shape",
+            "type": "string"
+          }
+        },
+        "required": [
+          "role",
+          "shape",
+          "coords"
+        ],
+        "title": "GeometryElement",
+        "type": "object"
+      },
+      "GeometrySummary": {
+        "additionalProperties": false,
+        "description": "What the vector scan of the drawing found, so a reader can see its extent.",
+        "properties": {
+          "arcs": {
+            "minimum": 0.0,
+            "title": "Arcs",
+            "type": "integer"
+          },
+          "arrows": {
+            "minimum": 0.0,
+            "title": "Arrows",
+            "type": "integer"
+          },
+          "circles": {
+            "minimum": 0.0,
+            "title": "Circles",
+            "type": "integer"
+          },
+          "dots": {
+            "minimum": 0.0,
+            "title": "Dots",
+            "type": "integer"
+          },
+          "segments": {
+            "minimum": 0.0,
+            "title": "Segments",
+            "type": "integer"
+          },
+          "truncated": {
+            "default": false,
+            "title": "Truncated",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "segments",
+          "circles",
+          "arcs",
+          "arrows",
+          "dots"
+        ],
+        "title": "GeometrySummary",
+        "type": "object"
+      },
       "InspectionReport": {
         "additionalProperties": false,
         "properties": {
@@ -560,12 +753,30 @@
           "document": {
             "$ref": "#/components/schemas/DocumentInfo"
           },
+          "feature_associations": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/FeatureAssociation"
+            },
+            "title": "Feature Associations",
+            "type": "array"
+          },
           "findings": {
             "items": {
               "$ref": "#/components/schemas/Finding"
             },
             "title": "Findings",
             "type": "array"
+          },
+          "geometry_summary": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GeometrySummary"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "measurements": {
             "items": {

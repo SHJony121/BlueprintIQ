@@ -374,6 +374,98 @@ class CadAnnotation(_Frozen):
         return self
 
 
+class AssociationRelation(StrEnum):
+    """What a CAD annotation was tied to. Never a compliance claim."""
+
+    DIAMETER_OF_CIRCLE = "diameter_of_circle"
+    RADIUS_OF_ARC = "radius_of_arc"
+    LINEAR_BETWEEN_REFERENCES = "linear_between_references"
+
+
+class AssociationStatus(StrEnum):
+    VERIFIED = "verified"  # every required geometric relationship was found, uniquely
+    UNRESOLVED = "unresolved"  # a supported kind, but the evidence is missing or competing
+    UNSUPPORTED = "unsupported"  # a kind of annotation or geometry that is not handled
+
+
+GeometryRole = Literal[
+    "text",
+    "leader",
+    "dimension_line",
+    "extension_line",
+    "arrow",
+    "dot",
+    "circle",
+    "arc",
+    "reference_edge",
+]
+GeometryShape = Literal["line", "circle", "arc", "point", "box"]
+_SHAPE_ARITY = {"line": 4, "circle": 3, "arc": 5, "point": 2, "box": 4}
+
+
+class GeometryElement(_Frozen):
+    """One piece of vector geometry in page space (unrotated, origin top-left, points).
+
+    ``coords`` by shape: line ``x0 y0 x1 y1``; circle ``cx cy r``; arc ``cx cy r start
+    sweep`` (angles in degrees in page space, measured from +x towards +y); point ``x y``;
+    box ``x0 y0 x1 y1``.
+    """
+
+    role: GeometryRole
+    shape: GeometryShape
+    coords: tuple[Coordinate, ...]
+
+    @model_validator(mode="after")
+    def _arity(self) -> Self:
+        if len(self.coords) != _SHAPE_ARITY[self.shape]:
+            raise ValueError(f"a {self.shape} needs {_SHAPE_ARITY[self.shape]} numbers")
+        return self
+
+
+AssociationId = Annotated[str, StringConstraints(pattern=r"^A[1-9][0-9]*$")]
+FeatureId = Annotated[str, StringConstraints(pattern=r"^G[1-9][0-9]*$")]
+
+
+class FeatureAssociation(_Frozen):
+    """A CAD annotation tied to the vector geometry it refers to, with the evidence.
+
+    Only ``verified`` carries a feature. It is a statement about the drawing's geometry,
+    not about the part: nothing here is a measurement or a finding, and no rule uses it.
+    ``candidates`` counts the geometric candidates examined (it is not a probability).
+    """
+
+    id: AssociationId
+    annotation_id: CadAnnotationId
+    page_number: int = Field(ge=1)
+    relation: AssociationRelation | None
+    status: AssociationStatus
+    feature_id: FeatureId | None = None
+    feature: tuple[GeometryElement, ...] = ()
+    evidence: tuple[GeometryElement, ...] = ()
+    candidates: int = Field(default=0, ge=0)
+    explanation: NonBlankStr
+
+    @model_validator(mode="after")
+    def _consistent(self) -> Self:
+        verified = self.status is AssociationStatus.VERIFIED
+        if verified != bool(self.feature) or verified != (self.feature_id is not None):
+            raise ValueError("only a verified association has a feature and a feature id")
+        if verified and (not self.evidence or self.relation is None):
+            raise ValueError("a verified association needs its relation and evidence")
+        return self
+
+
+class GeometrySummary(_Frozen):
+    """What the vector scan of the drawing found, so a reader can see its extent."""
+
+    segments: int = Field(ge=0)
+    circles: int = Field(ge=0)
+    arcs: int = Field(ge=0)
+    arrows: int = Field(ge=0)
+    dots: int = Field(ge=0)
+    truncated: bool = False
+
+
 Measurement = Annotated[DimensionMeasurement | MaterialAnnotation, Field(discriminator="kind")]
 
 
@@ -552,6 +644,8 @@ class DrawingExtraction(_Frozen):
     angled_text_lines: int = Field(default=0, ge=0)
     cad_annotations: tuple[CadAnnotation, ...] = ()
     unit_note: SourceEvidence | None = None
+    feature_associations: tuple[FeatureAssociation, ...] = ()
+    geometry_summary: GeometrySummary | None = None
 
     @model_validator(mode="after")
     def _cross_checks(self) -> Self:
@@ -582,6 +676,10 @@ class InspectionReport(_Frozen):
     # measurements and findings: no rule sees them.
     cad_annotations: tuple[CadAnnotation, ...] = ()
     cad_unit_note: SourceEvidence | None = None
+    # Which vector geometry each CAD annotation refers to, with evidence (CAD-2B.3). Kept
+    # apart from findings: an association never decides a rule outcome.
+    feature_associations: tuple[FeatureAssociation, ...] = ()
+    geometry_summary: GeometrySummary | None = None
     processing_time_ms: float = Field(ge=0, allow_inf_nan=False)
     disclaimer: str = DISCLAIMER
 
@@ -589,11 +687,22 @@ class InspectionReport(_Frozen):
     def _cross_checks(self) -> Self:
         self._check_unique_ids()
         _check_unique_cad_ids(self.cad_annotations)
+        self._check_associations()
         self._check_evidence_against_pages()
         self._check_findings_against_measurements()
         if self.summary != FindingSummary.from_findings(self.findings):
             raise ValueError("summary does not match the findings")
         return self
+
+    def _check_associations(self) -> None:
+        known = {a.id for a in self.cad_annotations}
+        ids = [a.id for a in self.feature_associations]
+        if len(set(ids)) != len(ids):
+            raise ValueError("duplicate association ids")
+        if any(a.annotation_id not in known for a in self.feature_associations):
+            raise ValueError("an association refers to an unknown CAD annotation")
+        if len({a.annotation_id for a in self.feature_associations}) != len(ids):
+            raise ValueError("a CAD annotation has more than one association")
 
     def _check_unique_ids(self) -> None:
         _check_unique_measurement_ids(self.measurements)

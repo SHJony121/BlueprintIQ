@@ -43,6 +43,17 @@ export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
         /**
+         * AssociationRelation
+         * @description What a CAD annotation was tied to. Never a compliance claim.
+         * @enum {string}
+         */
+        AssociationRelation: "diameter_of_circle" | "radius_of_arc" | "linear_between_references";
+        /**
+         * AssociationStatus
+         * @enum {string}
+         */
+        AssociationStatus: "verified" | "unresolved" | "unsupported";
+        /**
          * BBox
          * @description Axis-aligned box in PyMuPDF page space (points, origin top-left, y down).
          */
@@ -196,6 +207,43 @@ export interface components {
          */
         ExtractionStatus: "parsed" | "ambiguous";
         /**
+         * FeatureAssociation
+         * @description A CAD annotation tied to the vector geometry it refers to, with the evidence.
+         *
+         *     Only ``verified`` carries a feature. It is a statement about the drawing's geometry,
+         *     not about the part: nothing here is a measurement or a finding, and no rule uses it.
+         *     ``candidates`` counts the geometric candidates examined (it is not a probability).
+         */
+        FeatureAssociation: {
+            /** Annotation Id */
+            annotation_id: string;
+            /**
+             * Candidates
+             * @default 0
+             */
+            candidates: number;
+            /**
+             * Evidence
+             * @default []
+             */
+            evidence: components["schemas"]["GeometryElement"][];
+            /** Explanation */
+            explanation: string;
+            /**
+             * Feature
+             * @default []
+             */
+            feature: components["schemas"]["GeometryElement"][];
+            /** Feature Id */
+            feature_id?: string | null;
+            /** Id */
+            id: string;
+            /** Page Number */
+            page_number: number;
+            relation: components["schemas"]["AssociationRelation"] | null;
+            status: components["schemas"]["AssociationStatus"];
+        };
+        /**
          * Finding
          * @description The outcome of one rule for one measurement or group of measurements.
          */
@@ -239,6 +287,49 @@ export interface components {
             /** Passed */
             passed: number;
         };
+        /**
+         * GeometryElement
+         * @description One piece of vector geometry in page space (unrotated, origin top-left, points).
+         *
+         *     ``coords`` by shape: line ``x0 y0 x1 y1``; circle ``cx cy r``; arc ``cx cy r start
+         *     sweep`` (angles in degrees in page space, measured from +x towards +y); point ``x y``;
+         *     box ``x0 y0 x1 y1``.
+         */
+        GeometryElement: {
+            /** Coords */
+            coords: number[];
+            /**
+             * Role
+             * @enum {string}
+             */
+            role: "text" | "leader" | "dimension_line" | "extension_line" | "arrow" | "dot" | "circle" | "arc" | "reference_edge";
+            /**
+             * Shape
+             * @enum {string}
+             */
+            shape: "line" | "circle" | "arc" | "point" | "box";
+        };
+        /**
+         * GeometrySummary
+         * @description What the vector scan of the drawing found, so a reader can see its extent.
+         */
+        GeometrySummary: {
+            /** Arcs */
+            arcs: number;
+            /** Arrows */
+            arrows: number;
+            /** Circles */
+            circles: number;
+            /** Dots */
+            dots: number;
+            /** Segments */
+            segments: number;
+            /**
+             * Truncated
+             * @default false
+             */
+            truncated: boolean;
+        };
         /** InspectionReport */
         InspectionReport: {
             /**
@@ -253,8 +344,14 @@ export interface components {
              */
             disclaimer: string;
             document: components["schemas"]["DocumentInfo"];
+            /**
+             * Feature Associations
+             * @default []
+             */
+            feature_associations: components["schemas"]["FeatureAssociation"][];
             /** Findings */
             findings: components["schemas"]["Finding"][];
+            geometry_summary?: components["schemas"]["GeometrySummary"] | null;
             /** Measurements */
             measurements: (components["schemas"]["DimensionMeasurement"] | components["schemas"]["MaterialAnnotation"])[];
             /** Processing Time Ms */
@@ -382,6 +479,8 @@ export interface components {
     headers: never;
     pathItems: never;
 }
+export type SchemaAssociationRelation = components['schemas']['AssociationRelation'];
+export type SchemaAssociationStatus = components['schemas']['AssociationStatus'];
 export type SchemaBBox = components['schemas']['BBox'];
 export type SchemaCadAnnotation = components['schemas']['CadAnnotation'];
 export type SchemaCadKind = components['schemas']['CadKind'];
@@ -395,9 +494,12 @@ export type SchemaEvidenceRef = components['schemas']['EvidenceRef'];
 export type SchemaExtractionIssue = components['schemas']['ExtractionIssue'];
 export type SchemaExtractionMethod = components['schemas']['ExtractionMethod'];
 export type SchemaExtractionStatus = components['schemas']['ExtractionStatus'];
+export type SchemaFeatureAssociation = components['schemas']['FeatureAssociation'];
 export type SchemaFinding = components['schemas']['Finding'];
 export type SchemaFindingStatus = components['schemas']['FindingStatus'];
 export type SchemaFindingSummary = components['schemas']['FindingSummary'];
+export type SchemaGeometryElement = components['schemas']['GeometryElement'];
+export type SchemaGeometrySummary = components['schemas']['GeometrySummary'];
 export type SchemaInspectionReport = components['schemas']['InspectionReport'];
 export type SchemaLengthUnit = components['schemas']['LengthUnit'];
 export type SchemaMaterialAnnotation = components['schemas']['MaterialAnnotation'];

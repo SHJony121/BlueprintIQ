@@ -133,6 +133,8 @@ export function makeReport({ measurements, findings, overrides }: ReportParts = 
     },
     cad_annotations: [],
     cad_unit_note: null,
+    feature_associations: [],
+    geometry_summary: null,
     skipped_angled_lines: 0,
     processing_time_ms: 1203.4,
     disclaimer: "BlueprintIQ is an assistive engineering prototype.",

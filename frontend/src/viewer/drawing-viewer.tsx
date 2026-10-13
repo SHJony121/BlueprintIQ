@@ -1,9 +1,11 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { FindingStatus } from "@/api/types";
+import type { FeatureAssociation, FindingStatus } from "@/api/types";
 import { FINDING_LABEL } from "@/inspection/labels";
 import { UNPLACED_TEXT, type UnplacedReason, type ViewerEvidence } from "./evidence";
+import { AssociationOverlay } from "./association-overlay";
+import { associationShapes, shapesBounds } from "./association-shapes";
 import { EvidenceOverlay, OUTLINE_DESCRIPTION, type PlacedEvidence } from "./evidence-overlay";
 import { boxToViewport, checkPageGeometry } from "./geometry";
 import { PageStage } from "./page-canvas";
@@ -27,6 +29,8 @@ interface DrawingViewerProps {
   revealToken?: number | null;
   /** A box was chosen in the viewer. */
   onSelectFinding?: (findingId: string) => void;
+  /** A verified feature association to draw (its geometry), or null. */
+  association?: FeatureAssociation | null;
   source?: PdfSource;
 }
 
@@ -42,6 +46,7 @@ export function DrawingViewer({
   selectedFindingId = null,
   revealToken = null,
   onSelectFinding = () => {},
+  association = null,
   source = pdfjsSource,
 }: DrawingViewerProps) {
   const document = useOpenedPdf(file, source);
@@ -89,6 +94,7 @@ export function DrawingViewer({
           selectedFindingId={selectedFindingId}
           revealToken={revealToken}
           onSelectFinding={onSelectFinding}
+          association={association}
         />
       );
   }
@@ -145,6 +151,7 @@ function OpenDrawing({
   selectedFindingId,
   revealToken,
   onSelectFinding,
+  association,
 }: {
   pdf: OpenedPdf;
   file: File;
@@ -153,6 +160,7 @@ function OpenDrawing({
   selectedFindingId: string | null;
   revealToken: number | null;
   onSelectFinding: (findingId: string) => void;
+  association: FeatureAssociation | null;
 }) {
   const scroller = useRef<HTMLDivElement>(null);
   const [zoom, setZoom] = useState<Zoom>({ mode: "fit" });
@@ -175,6 +183,13 @@ function OpenDrawing({
       .filter((item) => item.pageNumber === 1)
       .map((item) => ({ item, rect: boxToViewport(page, item.bbox, layout.transform) }));
   }, [trust, evidence, layout]);
+
+  // The selected association's geometry, drawn only under the same trust as the boxes.
+  const associationShapesNow = useMemo(() => {
+    if (!trust.show || evidence === null || association === null || association.status !== "verified") return [];
+    const page = evidence.pages.find((p) => p.page_number === association.page_number);
+    return page === undefined ? [] : associationShapes(association, page, layout.transform);
+  }, [trust, evidence, association, layout]);
 
   // Bring the selected finding's boxes into view when the selection was made elsewhere.
   // Scrolls the viewer's own area only when the boxes are not already fully visible, never
@@ -209,6 +224,32 @@ function OpenDrawing({
       top: area.scrollTop + (view.top + view.bottom) / 2 - area.clientHeight / 2,
     });
   }, [revealToken]);
+
+  // Bring a newly selected association into view, unless it is already fully visible.
+  const latestShapes = useRef(associationShapesNow);
+  useEffect(() => {
+    latestShapes.current = associationShapesNow;
+  });
+  const associationId = association?.id ?? null;
+  useEffect(() => {
+    const area = scroller.current;
+    const stage = area?.querySelector<HTMLElement>("[data-testid=page-stage]");
+    const bounds = shapesBounds(latestShapes.current);
+    if (associationId === null || !area || !stage || bounds === null) return;
+    const a = area.getBoundingClientRect();
+    const s = stage.getBoundingClientRect();
+    const view = {
+      left: s.left - a.left + bounds.left,
+      top: s.top - a.top + bounds.top,
+      right: s.left - a.left + bounds.right,
+      bottom: s.top - a.top + bounds.bottom,
+    };
+    if (view.left >= 0 && view.top >= 0 && view.right <= area.clientWidth && view.bottom <= area.clientHeight) return;
+    area.scrollTo({
+      left: area.scrollLeft + (view.left + view.right) / 2 - area.clientWidth / 2,
+      top: area.scrollTop + (view.top + view.bottom) / 2 - area.clientHeight / 2,
+    });
+  }, [associationId]);
 
   const percent = Math.round(scale * 100);
   return (
@@ -262,6 +303,13 @@ function OpenDrawing({
       >
         {availableWidth > 0 ? (
           <PageStage page={pdf.page} layout={layout} scale={scale} devicePixelRatio={devicePixelRatio}>
+            {associationShapesNow.length > 0 ? (
+              <AssociationOverlay
+                shapes={associationShapesNow}
+                size={layout}
+                label={`Geometry for association ${association?.id ?? ""}: the associated feature and its supporting lines`}
+              />
+            ) : null}
             {showEvidence && placed.length > 0 ? <EvidenceOverlay placed={placed} page={layout} selectedFindingId={selectedFindingId} onSelect={onSelectFinding} showLabels={showLabels} /> : null}
           </PageStage>
         ) : null}
