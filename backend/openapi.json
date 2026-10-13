@@ -369,7 +369,8 @@
       },
       "ExtractionMethod": {
         "enum": [
-          "pdf_text_layer"
+          "pdf_text_layer",
+          "pdf_text_layer_row_association"
         ],
         "title": "ExtractionMethod",
         "type": "string"
@@ -640,6 +641,16 @@
             "default": "material",
             "title": "Kind",
             "type": "string"
+          },
+          "label_source": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SourceEvidence"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "source": {
             "$ref": "#/components/schemas/SourceEvidence"

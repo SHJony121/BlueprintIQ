@@ -234,6 +234,7 @@ function readSource(value: unknown, path: string): SourceEvidence {
     raw_text: str(o.raw_text, `${path}.raw_text`),
     extraction_method: oneOf(o.extraction_method, `${path}.extraction_method`, {
       pdf_text_layer: 1,
+      pdf_text_layer_row_association: 1,
     }),
   };
 }
@@ -284,7 +285,16 @@ function readMeasurement(value: unknown, path: string): Measurement {
       status: oneOf(o.status, `${path}.status`, EXTRACTION_STATUSES),
       issues,
       source: readSource(o.source, `${path}.source`),
+      label_source:
+        o.label_source === undefined || o.label_source === null
+          ? null
+          : readSource(o.label_source, `${path}.label_source`),
     };
+    // A value tied to its label by position always carries the label, and only it does.
+    const associated = material.source.extraction_method === "pdf_text_layer_row_association";
+    if (associated !== (material.label_source !== null)) {
+      bad(`${path}.label_source`, "a row-associated material needs its label source");
+    }
     return material;
   }
   return bad(`${path}.kind`, "unknown measurement kind");

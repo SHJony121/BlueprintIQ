@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { render, screen, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
-import { cadAnnotation, finding, makeReport } from "../../tests/ui/builders";
+import { cadAnnotation, finding, makeReport, material } from "../../tests/ui/builders";
 import { interpretResponse, readReport } from "@/api/read-response";
 import { ReportView } from "./report-view";
 
@@ -143,6 +143,48 @@ describe("reading CAD annotations from a response", () => {
   ])("rejects %s", (_label, mutate) => {
     expect(
       interpretResponse(200, JSON.stringify(body(mutate)), null).kind,
+    ).toBe("malformed");
+  });
+});
+
+describe("a material read from a separate label line", () => {
+  const associated = () =>
+    material({
+      value: "POM C NOIR",
+      source: {
+        page_number: 1,
+        bbox: { x0: 311.7, y0: 611.1, x1: 365.7, y1: 624.8 },
+        raw_text: "POM C noir",
+        extraction_method: "pdf_text_layer_row_association",
+      },
+      label_source: {
+        page_number: 1,
+        bbox: { x0: 276.6, y0: 614.9, x1: 301.8, y1: 623.1 },
+        raw_text: "Matière :",
+        extraction_method: "pdf_text_layer",
+      },
+    });
+
+  it("shows the label and the value as the two separate lines they are", () => {
+    render(<ReportView report={makeReport({ measurements: [associated()], findings: [] })} />);
+    const item = document.getElementById("measurement-M4")!;
+    expect(item.textContent).toMatch(/Label \(separate line\)/);
+    expect(item.textContent).toMatch(/“Matière :”/);
+    expect(item.textContent).toMatch(/Value \(same row, to the right\)/);
+    expect(item.textContent).toMatch(/“POM C noir”/);
+    expect(item.textContent).not.toMatch(/Matière : POM/); // no joined line is shown
+  });
+
+  it("is accepted by the response reader, which needs the label with the method", () => {
+    const body = (mutate: (m: Record<string, unknown>) => void) => {
+      const report = JSON.parse(JSON.stringify(makeReport({ measurements: [associated()], findings: [] })));
+      mutate(report.measurements[0]);
+      return JSON.stringify(report);
+    };
+    expect(interpretResponse(200, body(() => {}), null).kind).toBe("report");
+    expect(interpretResponse(200, body((m) => delete m.label_source), null).kind).toBe("malformed");
+    expect(
+      interpretResponse(200, body((m) => ((m.source as Record<string, unknown>).extraction_method = "pdf_text_layer")), null).kind,
     ).toBe("malformed");
   });
 });

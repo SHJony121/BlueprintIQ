@@ -39,7 +39,7 @@ function MeasurementItem({ measurement: m }: { measurement: Measurement }) {
           ))}
         </ul>
       )}
-      <Source source={m.source} />
+      <Source source={m.source} label={m.kind === "material" ? m.label_source : null} />
     </li>
   );
 }
@@ -59,10 +59,25 @@ function Reading({ measurement: m }: { measurement: Measurement }) {
   );
 }
 
-function Source({ source }: { source: SourceEvidence }) {
+function Source({
+  source,
+  label = null,
+}: {
+  source: SourceEvidence;
+  label?: SourceEvidence | null;
+}) {
   return (
     <dl className="mt-2 grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-0.5 text-xs">
-      <dt className="text-muted">Source text</dt>
+      {label !== null && (
+        <>
+          <dt className="text-muted">Label (separate line)</dt>
+          <dd className="font-mono break-words">
+            &ldquo;{label.raw_text}&rdquo;
+            {label.bbox && <span className="text-muted"> at {formatBox(label.bbox)}</span>}
+          </dd>
+        </>
+      )}
+      <dt className="text-muted">{label !== null ? "Value (same row, to the right)" : "Source text"}</dt>
       <dd className="font-mono break-words">&ldquo;{source.raw_text}&rdquo;</dd>
       <dt className="text-muted">Page</dt>
       <dd className="font-mono">{source.page_number}</dd>

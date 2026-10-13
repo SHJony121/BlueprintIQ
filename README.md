@@ -171,8 +171,8 @@ All executed and passing in GitHub Actions (Linux) on the milestone commit; no a
 
 | Suite | Command | Count |
 |---|---|---|
-| Backend (ruff, mypy --strict, pytest) | `cd backend && uv run pytest` | 1284 |
-| Frontend unit and component (Vitest) | `cd frontend && npm test` | 753 |
+| Backend (ruff, mypy --strict, pytest) | `cd backend && uv run pytest` | 1309 |
+| Frontend unit and component (Vitest) | `cd frontend && npm test` | 755 |
 | Proxy against the real Next.js server, launch binding | `npm run test:server` (after `npm run build`) | 24 |
 | Frontend against the real FastAPI backend | `npm run test:backend` | 184 |
 | Browser, Chromium via Playwright, real backend | `npm run test:e2e` (after build; first `npx playwright install chromium`) | 230 |

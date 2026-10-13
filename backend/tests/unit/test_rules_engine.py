@@ -252,6 +252,10 @@ def test_conflicting_materials_are_needs_review() -> None:
     findings = evaluate([mat(1, "SS400"), mat(2, "S45C")], MAT_REQ)
     assert outcomes(findings) == [("MAT-REQ-001", REVIEW, ("M1", "M2"))]
     assert "SS400" in (findings[0].actual or "") and "S45C" in (findings[0].actual or "")
+    # Different wording is not claimed to be a contradiction: equivalence is unverified.
+    assert (findings[0].actual or "").startswith("different material descriptions:")
+    assert "conflict" not in findings[0].message.lower()
+    assert "not verified" in findings[0].message and "review" in findings[0].message
 
 
 def test_parsed_plus_ambiguous_material_is_needs_review() -> None:

@@ -180,7 +180,7 @@ export interface components {
          * ExtractionMethod
          * @enum {string}
          */
-        ExtractionMethod: "pdf_text_layer";
+        ExtractionMethod: "pdf_text_layer" | "pdf_text_layer_row_association";
         /**
          * ExtractionStatus
          * @description How trustworthy an extracted annotation is. Not a rule outcome.
@@ -290,6 +290,7 @@ export interface components {
              * @enum {string}
              */
             kind: "material";
+            label_source?: components["schemas"]["SourceEvidence"] | null;
             source: components["schemas"]["SourceEvidence"];
             status: components["schemas"]["ExtractionStatus"];
             /** Value */

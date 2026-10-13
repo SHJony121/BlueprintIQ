@@ -77,8 +77,9 @@ _LABEL = re.compile(r"[ \t]*(?P<label>[A-Za-z][A-Za-z0-9 ()./_-]{0,39}?)[ \t]*:"
 # The material label as a title block may print it: English, French, or both on one line.
 # Same line only; the value must follow the colon. It is read exactly as "MATERIAL:".
 _MATERIAL_ALIAS = re.compile(
-    r"[ 	]*(?:MATERIAL[ 	]*/[ 	]*MATI[EÈ]RE|MATI[EÈ]RE(?:[ 	]*/[ 	]*MATERIAL)?)[ 	]*:",
-    re.IGNORECASE,
+    r"[ 	]*(?:MATERIAL[ 	]*/[ 	]*MATI[EÈè]RE"
+    r"|MATI[EÈè]RE(?:[ 	]*/[ 	]*MATERIAL)?|MAT[EÉé]RIAL)[ 	]*:",
+    re.IGNORECASE | re.ASCII,  # ASCII-only folding, as for the labels above
 )
 # Near miss: a supported label preceded only by non-letters (bullets, numbering,
 # brackets) and/or followed by a colon look-alike. Matched on NFKC-normalized text

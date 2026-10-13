@@ -175,21 +175,30 @@ def _conflict(
     name = rule.applies_to.value
     groups = _groups(readable)
     values = ", ".join(_reading(ms[0]) for ms in groups[:_GROUPS_SHOWN]) + _more(groups)
+    is_material = rule.applies_to is MeasurementType.MATERIAL
+    prefix = "different material descriptions: " if is_material else "conflicting values: "
     # Show as many value groups as fit, always keeping the count of the rest.
     for shown in range(min(_GROUPS_SHOWN, len(groups)), 0, -1):
-        actual = "conflicting values: " + "; ".join(
-            f"{_reading_mm(ms[0])} ({_ids(ms)})" for ms in groups[:shown]
-        )
+        actual = prefix + "; ".join(f"{_reading_mm(ms[0])} ({_ids(ms)})" for ms in groups[:shown])
         actual += f" and {len(groups) - shown} more" if len(groups) > shown else ""
         if len(actual) <= _MAX_TEXT:
             break
     outcome = "the requirement is not reported as met" if isinstance(rule, RequiredRule) else (
         "no pass or fail is reported"
     )  # fmt: skip
-    message = (
-        f"The drawing gives conflicting {name} values ({values}). A part has one {name}, so "
-        f"{outcome}; check which value is intended."
-    )
+    if is_material:
+        # Different wording is not proof of different materials (for example the same
+        # material described in two languages), so no disagreement is claimed.
+        message = (
+            f"The drawing gives different material descriptions ({values}). Whether they "
+            f"describe the same material is not verified, so {outcome}; a person needs to "
+            "review them."
+        )
+    else:
+        message = (
+            f"The drawing gives conflicting {name} values ({values}). A part has one {name}, "
+            f"so {outcome}; check which value is intended."
+        )
     return _Outcome(rule, FindingStatus.NEEDS_REVIEW, tuple(cited), actual, message)
 
 
