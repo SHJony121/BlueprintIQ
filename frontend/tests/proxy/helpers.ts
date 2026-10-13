@@ -304,7 +304,8 @@ export function rawSocket(port: number) {
   const socket = net.connect(port, "127.0.0.1");
   let received = "";
   socket.on("data", (chunk: Buffer) => (received += chunk.toString("latin1")));
-  socket.on("error", () => {});
+  let failure: string | null = null;
+  socket.on("error", (error: NodeJS.ErrnoException) => (failure = error.code ?? error.message));
   const ended = new Promise<void>((resolve) => socket.once("close", () => resolve()));
   return {
     socket,
@@ -328,5 +329,7 @@ export function rawSocket(port: number) {
       return parseRaw(received);
     },
     received: () => received,
+    /** The socket error code (such as ECONNRESET) if the connection broke, else null. */
+    failure: () => failure,
   };
 }
