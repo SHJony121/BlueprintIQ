@@ -172,7 +172,7 @@ All executed and passing in GitHub Actions (Linux) on the milestone commit; no a
 | Suite | Command | Count |
 |---|---|---|
 | Backend (ruff, mypy --strict, pytest) | `cd backend && uv run pytest` | 1444 |
-| Frontend unit and component (Vitest) | `cd frontend && npm test` | 772 |
+| Frontend unit and component (Vitest) | `cd frontend && npm test` | 784 |
 | Proxy against the real Next.js server, launch binding | `npm run test:server` (after `npm run build`) | 24 |
 | Frontend against the real FastAPI backend | `npm run test:backend` | 185 |
 | Browser, Chromium via Playwright, real backend | `npm run test:e2e` (after build; first `npx playwright install chromium`) | 231 |
@@ -195,7 +195,11 @@ Full list: [docs/testing-and-evaluation.md](docs/testing-and-evaluation.md#limit
 
 ## Security and release restrictions
 
-**Trusted local use only. Public deployment is blocked.** No authentication, rate limiting or TLS (the Next.js proxy adds none); no worker memory limit on Windows (Linux only); inspections are not cancelled when a client disconnects; real CAD PDFs not benchmarked; and **PyMuPDF is AGPL-3.0 / commercial**, so a licensing decision (publish under AGPL-3.0, buy a licence, or switch to a permissive engine such as pypdfium2 — see [ADR-001](docs/design/adr-001-pdf-engine.md)) is required before the repository is made public. See [docs/security-and-deployment.md](docs/security-and-deployment.md).
+**Trusted local use only. Public deployment is blocked.** No authentication, rate limiting or TLS (the Next.js proxy adds none); no worker memory limit on Windows (Linux only); inspections are not cancelled when a client disconnects; real CAD PDFs not benchmarked; and the remaining public-release work (host and rate-limit configuration, security headers, packaging) is not done. The licence decision is made: **AGPL-3.0-or-later** (see [Licence](#licence)). See [docs/security-and-deployment.md](docs/security-and-deployment.md).
+
+## Licence
+
+BlueprintIQ is free software under the **GNU Affero General Public License, version 3 or (at your option) any later version** (see [LICENSE](LICENSE)); copyright (C) 2026 Shahriar Hasan Jony. The PDF engine, PyMuPDF/MuPDF, is AGPL-3.0 (or commercial), and BlueprintIQ uses it under the AGPL-3.0, so the whole project carries the same licence. Anyone using a deployed copy over a network is entitled to its source: a deployment sets `NEXT_PUBLIC_SOURCE_URL` to the public repository of the version it runs, and the page footer links it. Third-party licences are listed in [NOTICE.md](NOTICE.md). The software comes with no warranty and is not certified engineering-compliance software.
 
 ## Roadmap
 
