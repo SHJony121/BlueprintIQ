@@ -188,3 +188,46 @@ describe("a material read from a separate label line", () => {
     ).toBe("malformed");
   });
 });
+
+describe("a stacked tolerance reconstructed from separate lines", () => {
+  const part = (text: string, y0: number) => ({
+    page_number: 1,
+    bbox: { x0: 118, y0, x1: 128, y1: y0 + 8 },
+    raw_text: text,
+    extraction_method: "pdf_text_layer" as const,
+  });
+  const stacked = () =>
+    cadAnnotation("C1", "3.7", {
+      nominal: "3.7",
+      upper_deviation: "0",
+      lower_deviation: "-0.2",
+      tolerance_source: "stacked",
+      tolerance_parts: [part("+0", 288), part("-0.2", 298)],
+    });
+
+  it("shows the value and each fragment as printed, and says it was reconstructed", () => {
+    render(<ReportView report={makeReport({ overrides: { cad_annotations: [stacked()] } })} />);
+    const item = document.getElementById("cad-C1")!;
+    expect(item.textContent).toMatch(/Tolerance \(separate lines\)/);
+    expect(item.textContent).toMatch(/“\+0” above/);
+    expect(item.textContent).toMatch(/“-0\.2”\s*below/);
+    expect(item.textContent).toMatch(/reconstructed from their position/);
+    expect(item.textContent).toMatch(/\+0 \/ -0\.2/);
+  });
+
+  const body = (mutate: (a: Record<string, unknown>) => void) => {
+    const report = JSON.parse(
+      JSON.stringify(makeReport({ overrides: { cad_annotations: [stacked()] } })),
+    );
+    mutate(report.cad_annotations[0]);
+    return JSON.stringify(report);
+  };
+
+  it("is accepted by the reader, which insists on exactly two parts", () => {
+    expect(interpretResponse(200, body(() => {}), null).kind).toBe("report");
+    expect(interpretResponse(200, body((a) => (a.tolerance_parts = [])), null).kind).toBe("malformed");
+    expect(interpretResponse(200, body((a) => (a.tolerance_source = "inline")), null).kind).toBe("malformed");
+    expect(interpretResponse(200, body((a) => (a.tolerance_source = null)), null).kind).toBe("malformed");
+    expect(interpretResponse(200, body((a) => delete a.tolerance_parts), null).kind).toBe("malformed");
+  });
+});

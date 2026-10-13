@@ -22,6 +22,7 @@ from blueprintiq.domain.models import (
 from blueprintiq.extraction.annotation_parser import parse_lines
 from blueprintiq.extraction.cad_annotations import parse_cad_annotations
 from blueprintiq.extraction.material_association import associate_materials
+from blueprintiq.extraction.stacked_tolerance import reconstruct_stacked
 from blueprintiq.extraction.text_layer import extract_page_text
 from blueprintiq.ingestion.errors import (
     InvalidPdfError,
@@ -124,6 +125,7 @@ def read_drawing(
     parsed = parse_lines(text.lines, method=ExtractionMethod.PDF_TEXT_LAYER)
     measurements = associate_materials(text.lines, parsed.measurements, text.pages)
     cad, unit_note = parse_cad_annotations(text.lines)
+    cad = reconstruct_stacked(cad, text.lines, text.pages)
     document = DocumentInfo(
         filename=_display_name(filename),
         sha256=hashlib.sha256(data).hexdigest(),

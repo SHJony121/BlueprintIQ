@@ -86,6 +86,13 @@ export interface components {
             nominal: string | null;
             source: components["schemas"]["SourceEvidence"];
             status: components["schemas"]["ExtractionStatus"];
+            /**
+             * Tolerance Parts
+             * @default []
+             */
+            tolerance_parts: components["schemas"]["SourceEvidence"][];
+            /** Tolerance Source */
+            tolerance_source?: ("inline" | "stacked") | null;
             unit?: components["schemas"]["CadUnit"] | null;
             /** @default none */
             unit_source: components["schemas"]["UnitSource"];

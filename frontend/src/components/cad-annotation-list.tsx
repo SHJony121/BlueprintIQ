@@ -73,6 +73,19 @@ export function CadAnnotationList({
               <dd className="font-mono break-words">
                 &ldquo;{a.source.raw_text}&rdquo;
               </dd>
+              {a.tolerance_parts.length === 2 && (
+                <>
+                  <dt className="text-muted">Tolerance (separate lines)</dt>
+                  <dd className="font-mono break-words">
+                    &ldquo;{a.tolerance_parts[0]!.raw_text}&rdquo; above, &ldquo;
+                    {a.tolerance_parts[1]!.raw_text}&rdquo; below
+                    <span className="font-sans text-muted">
+                      {" "}
+                      (reconstructed from their position; each line is shown as printed)
+                    </span>
+                  </dd>
+                </>
+              )}
               <dt className="text-muted">Page</dt>
               <dd className="font-mono">{a.source.page_number}</dd>
               <dt className="text-muted">Location</dt>

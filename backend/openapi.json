@@ -94,6 +94,29 @@
           "status": {
             "$ref": "#/components/schemas/ExtractionStatus"
           },
+          "tolerance_parts": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/SourceEvidence"
+            },
+            "title": "Tolerance Parts",
+            "type": "array"
+          },
+          "tolerance_source": {
+            "anyOf": [
+              {
+                "enum": [
+                  "inline",
+                  "stacked"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tolerance Source"
+          },
           "unit": {
             "anyOf": [
               {

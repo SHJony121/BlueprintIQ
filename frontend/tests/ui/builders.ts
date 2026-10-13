@@ -223,6 +223,8 @@ export const cadAnnotation = (
   lower_deviation: "-0.1",
   unit: "mm",
   unit_source: "drawing_note",
+  tolerance_source: "inline",
+  tolerance_parts: [],
   status: "parsed",
   issues: [],
   source: {

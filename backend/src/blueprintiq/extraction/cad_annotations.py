@@ -165,6 +165,7 @@ def _read(
         nominal=nominal,
         upper_deviation=upper,
         lower_deviation=lower,
+        tolerance_source="inline" if upper is not None else None,
         unit=unit,
         unit_source=unit_source,
         status=ExtractionStatus.PARSED if unit is not None else ExtractionStatus.AMBIGUOUS,

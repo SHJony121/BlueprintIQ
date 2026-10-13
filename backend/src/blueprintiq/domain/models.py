@@ -338,6 +338,12 @@ class CadAnnotation(_Frozen):
     lower_deviation: SignedQuantity | None = None
     unit: CadUnit | None = None
     unit_source: UnitSource = UnitSource.NONE
+    # Where a tolerance came from: "inline" (written on the same line as the value) or
+    # "stacked" (reconstructed from two separate lines by position; ``tolerance_parts``
+    # then holds the upper and the lower line, each verbatim, and ``source`` stays the
+    # verbatim value line). ``None`` when there is no tolerance.
+    tolerance_source: Literal["inline", "stacked"] | None = None
+    tolerance_parts: tuple[SourceEvidence, ...] = ()
     status: ExtractionStatus
     issues: tuple[ExtractionIssue, ...] = ()
     source: SourceEvidence
@@ -345,6 +351,11 @@ class CadAnnotation(_Frozen):
     @model_validator(mode="after")
     def _consistent(self) -> Self:
         _check_status_and_issues(self.status, self.issues, "CAD annotation")
+        has_tolerance = self.upper_deviation is not None
+        if has_tolerance != (self.tolerance_source is not None):
+            raise ValueError("a tolerance needs its source, and no tolerance has none")
+        if len(self.tolerance_parts) != (2 if self.tolerance_source == "stacked" else 0):
+            raise ValueError("a stacked tolerance has exactly its two parts; others have none")
         if (self.upper_deviation is None) != (self.lower_deviation is None):
             raise ValueError("a tolerance needs both an upper and a lower deviation")
         if (
@@ -500,7 +511,9 @@ def _check_evidence_against_pages(
         if isinstance(m, MaterialAnnotation) and m.label_source is not None
     ]
     sources += [(f"annotation {a.label}", a.source) for a in unrecognized]
-    sources += [(f"CAD annotation {a.id}", a.source) for a in cad]
+    for a in cad:
+        sources.append((f"CAD annotation {a.id}", a.source))
+        sources += [(f"tolerance part of CAD annotation {a.id}", p) for p in a.tolerance_parts]
     if unit_note is not None:
         sources.append(("unit note", unit_note))
     for label, source in sources:
