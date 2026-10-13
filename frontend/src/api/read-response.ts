@@ -314,6 +314,19 @@ function readCadAnnotation(value: unknown, path: string): CadAnnotation {
   if (o.association !== "none") bad(`${path}.association`, "a CAD annotation is never associated");
   const deviation = (v: unknown, p: string) => pattern(v, p, SIGNED_DECIMAL);
   const optional = (v: unknown) => (v === undefined ? null : v);
+  const tolerance_source = nullable(optional(o.tolerance_source), `${path}.tolerance_source`, (v, p) =>
+    oneOf(v, p, { inline: 1, stacked: 1 }),
+  );
+  const tolerance_parts = list(o.tolerance_parts, `${path}.tolerance_parts`).map((part, i) =>
+    readSource(part, `${path}.tolerance_parts[${i}]`),
+  );
+  const hasTolerance = o.upper_deviation !== undefined && o.upper_deviation !== null;
+  if (hasTolerance !== (tolerance_source !== null)) {
+    bad(`${path}.tolerance_source`, "a tolerance needs its source, and no tolerance has none");
+  }
+  if (tolerance_parts.length !== (tolerance_source === "stacked" ? 2 : 0)) {
+    bad(`${path}.tolerance_parts`, "a stacked tolerance has exactly two parts, others none");
+  }
   return {
     id: pattern(o.id, `${path}.id`, CAD_ID),
     association: "none",
@@ -325,6 +338,8 @@ function readCadAnnotation(value: unknown, path: string): CadAnnotation {
     lower_deviation: nullable(optional(o.lower_deviation), `${path}.lower_deviation`, deviation),
     unit: nullable(optional(o.unit), `${path}.unit`, (v, p) => oneOf(v, p, CAD_UNITS)),
     unit_source: oneOf(o.unit_source, `${path}.unit_source`, UNIT_SOURCES),
+    tolerance_source,
+    tolerance_parts,
     status: oneOf(o.status, `${path}.status`, EXTRACTION_STATUSES),
     issues: list(o.issues, `${path}.issues`).map((issue, i) =>
       oneOf(issue, `${path}.issues[${i}]`, EXTRACTION_ISSUES),

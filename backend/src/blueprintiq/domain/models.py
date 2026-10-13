@@ -327,7 +327,8 @@ class CadAnnotation(_Frozen):
     It is never attached to a physical feature (``association`` is always ``none``),
     is never a ``Measurement`` and is never evaluated by a rule. ``upper_deviation`` and
     ``lower_deviation`` are signed: ``2.7 ±0.1`` is +0.1 and -0.1; ``3.7 +0/-0.2`` is 0
-    and -0.2. A tolerance that is not on the same line as its value is not joined to it.
+    and -0.2. A tolerance on other lines is joined to its value only when the layout is
+    unambiguous (see ``tolerance_source``); otherwise it stays a separate ambiguous entry.
     """
 
     id: CadAnnotationId
@@ -338,6 +339,12 @@ class CadAnnotation(_Frozen):
     lower_deviation: SignedQuantity | None = None
     unit: CadUnit | None = None
     unit_source: UnitSource = UnitSource.NONE
+    # Where a tolerance came from: "inline" (written on the same line as the value) or
+    # "stacked" (reconstructed from two separate lines by position; ``tolerance_parts``
+    # then holds the upper and the lower line, each verbatim, and ``source`` stays the
+    # verbatim value line). ``None`` when there is no tolerance.
+    tolerance_source: Literal["inline", "stacked"] | None = None
+    tolerance_parts: tuple[SourceEvidence, ...] = ()
     status: ExtractionStatus
     issues: tuple[ExtractionIssue, ...] = ()
     source: SourceEvidence
@@ -345,6 +352,11 @@ class CadAnnotation(_Frozen):
     @model_validator(mode="after")
     def _consistent(self) -> Self:
         _check_status_and_issues(self.status, self.issues, "CAD annotation")
+        has_tolerance = self.upper_deviation is not None
+        if has_tolerance != (self.tolerance_source is not None):
+            raise ValueError("a tolerance needs its source, and no tolerance has none")
+        if len(self.tolerance_parts) != (2 if self.tolerance_source == "stacked" else 0):
+            raise ValueError("a stacked tolerance has exactly its two parts; others have none")
         if (self.upper_deviation is None) != (self.lower_deviation is None):
             raise ValueError("a tolerance needs both an upper and a lower deviation")
         if (
@@ -500,7 +512,9 @@ def _check_evidence_against_pages(
         if isinstance(m, MaterialAnnotation) and m.label_source is not None
     ]
     sources += [(f"annotation {a.label}", a.source) for a in unrecognized]
-    sources += [(f"CAD annotation {a.id}", a.source) for a in cad]
+    for a in cad:
+        sources.append((f"CAD annotation {a.id}", a.source))
+        sources += [(f"tolerance part of CAD annotation {a.id}", p) for p in a.tolerance_parts]
     if unit_note is not None:
         sources.append(("unit note", unit_note))
     for label, source in sources:
@@ -622,6 +636,19 @@ class InspectionReport(_Frozen):
 # ------------------------------------------------------------------- text input
 
 
+class TextWord(_Frozen):
+    """One whitespace-delimited word of a line, with the box of its real glyphs.
+
+    ``number_bbox`` is the box without a leading sign character (``+``, ``-``), i.e. where
+    the digits start; it equals ``bbox`` when the word has no sign. Boxes come from the
+    PDF's glyph positions, never from string widths.
+    """
+
+    text: str
+    bbox: BBox
+    number_bbox: BBox
+
+
 class TextLine(_Frozen):
     """One line of text with its location: the engine-neutral input to the parser.
 
@@ -632,3 +659,7 @@ class TextLine(_Frozen):
     text: str
     page_number: int = Field(ge=1)
     bbox: BBox | None = None
+    # The words of the line and its writing direction in page space (a unit axis vector,
+    # y down), when the extractor knows them. Used only to compare positions.
+    words: tuple[TextWord, ...] = ()
+    writing: tuple[float, float] = (1.0, 0.0)

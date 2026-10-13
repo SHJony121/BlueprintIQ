@@ -63,7 +63,8 @@ export interface components {
          *     It is never attached to a physical feature (``association`` is always ``none``),
          *     is never a ``Measurement`` and is never evaluated by a rule. ``upper_deviation`` and
          *     ``lower_deviation`` are signed: ``2.7 ±0.1`` is +0.1 and -0.1; ``3.7 +0/-0.2`` is 0
-         *     and -0.2. A tolerance that is not on the same line as its value is not joined to it.
+         *     and -0.2. A tolerance on other lines is joined to its value only when the layout is
+         *     unambiguous (see ``tolerance_source``); otherwise it stays a separate ambiguous entry.
          */
         CadAnnotation: {
             /**
@@ -86,6 +87,13 @@ export interface components {
             nominal: string | null;
             source: components["schemas"]["SourceEvidence"];
             status: components["schemas"]["ExtractionStatus"];
+            /**
+             * Tolerance Parts
+             * @default []
+             */
+            tolerance_parts: components["schemas"]["SourceEvidence"][];
+            /** Tolerance Source */
+            tolerance_source?: ("inline" | "stacked") | null;
             unit?: components["schemas"]["CadUnit"] | null;
             /** @default none */
             unit_source: components["schemas"]["UnitSource"];
