@@ -77,3 +77,31 @@ test("CAD annotations are listed apart from the findings and never become pass o
   await expect(section).toContainText("never produce a pass or fail");
   await expect(page.getByTestId("summary-pass")).toContainText("1"); // the labeled material only
 });
+
+test("a verified feature association is drawn on the page, and an unresolved one says so", async ({ page }) => {
+  await page.goto(BASE());
+  await page.setInputFiles("input[type=file]", path.resolve(process.cwd(), "tests/fixtures/feature_dimensions.pdf"));
+  await expect(page.getByRole("status")).toHaveText(/^Inspection complete/);
+  const diameter = page.getByTestId("cad-annotations").locator("li", { hasText: "Ø12" });
+  await expect(diameter.getByTestId(/^association-A/)).toContainText("Feature identified: Diameter of a drawn circle");
+  const unresolved = page.getByTestId("cad-annotations").locator("li", { hasText: "Ø10" });
+  await expect(unresolved.getByTestId(/^association-A/)).toContainText("Association unresolved");
+  await expect(unresolved.getByRole("button", { name: "Show on drawing" })).toHaveCount(0);
+  await expect(page.getByTestId("association-layer")).toHaveCount(0);
+
+  await diameter.getByRole("button", { name: "Show on drawing" }).click();
+  const layer = page.getByTestId("association-layer");
+  await expect(layer).toBeVisible();
+  // The ring is the circle that was drawn (centre 300,400, r 25 in page points), at this zoom.
+  const ring = layer.locator("polygon[data-role=circle]");
+  const box = await ring.boundingBox();
+  const stage = await page.getByTestId("page-stage").boundingBox();
+  expect(box && stage).toBeTruthy();
+  const scale = stage!.width / 595;
+  expect(box!.x - stage!.x + box!.width / 2).toBeCloseTo(300 * scale, 0);
+  expect(box!.y - stage!.y + box!.height / 2).toBeCloseTo(400 * scale, 0);
+  // The outline's own width (3.5 px) adds to the box on each side.
+  expect(Math.abs(box!.width - 50 * scale)).toBeLessThan(5);
+  await diameter.getByRole("button", { name: "Hide on drawing" }).click();
+  await expect(page.getByTestId("association-layer")).toHaveCount(0);
+});

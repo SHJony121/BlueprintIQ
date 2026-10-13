@@ -6,7 +6,7 @@
 // Real PDF.js geometry: geometry.pdfjs.test.ts. Real rendering and pixels: tests/e2e.
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { PageInfo } from "@/api/types";
+import type { FeatureAssociation, PageInfo } from "@/api/types";
 import { box } from "../../tests/ui/builders";
 import { controlledSource, fakePdf } from "../../tests/ui/fake-pdf";
 import { DrawingViewer, type InspectionPhase } from "./drawing-viewer";
@@ -64,9 +64,21 @@ const evidenceFor = (sha: string, overrides: Partial<ViewerEvidence> = {}): View
 
 function show(
   source: PdfSource,
-  props: { file: File | null; evidence?: ViewerEvidence | null; inspection?: InspectionPhase; selectedFindingId?: string | null },
+  props: {
+    file: File | null;
+    evidence?: ViewerEvidence | null;
+    inspection?: InspectionPhase;
+    selectedFindingId?: string | null;
+    association?: FeatureAssociation | null;
+  },
 ) {
-  const all = { evidence: null, inspection: "succeeded" as InspectionPhase, selectedFindingId: null, ...props };
+  const all = {
+    evidence: null,
+    inspection: "succeeded" as InspectionPhase,
+    selectedFindingId: null,
+    association: null,
+    ...props,
+  };
   const view = render(<DrawingViewer source={source} {...all} />);
   return {
     ...view,
@@ -497,5 +509,63 @@ describe("zoom controls", () => {
     await openWith(SHA_A);
     const region = screen.getByRole("region", { name: "Drawing, scrollable" });
     expect(region.tabIndex).toBe(0);
+  });
+});
+
+describe("a selected feature association", () => {
+  const association = (overrides: Partial<FeatureAssociation> = {}): FeatureAssociation => ({
+    id: "A1",
+    annotation_id: "C1",
+    page_number: 1,
+    relation: "diameter_of_circle",
+    status: "verified",
+    feature_id: "G1",
+    feature: [{ role: "circle", shape: "circle", coords: [200, 300, 25] }],
+    evidence: [
+      { role: "leader", shape: "line", coords: [265, 300, 225, 300] },
+      { role: "arrow", shape: "point", coords: [225, 300] },
+    ],
+    candidates: 1,
+    explanation: "Verified: test.",
+    ...overrides,
+  });
+  const layer = () => document.querySelector<SVGElement>("[data-testid=association-layer]");
+
+  async function openAssociation(sha: string, a: FeatureAssociation | null) {
+    const { source, opens } = controlledSource();
+    const fake = fakePdf({ sha256: sha });
+    show(source, { file: pdfFile("a.pdf"), evidence: evidenceFor(SHA_A), association: a });
+    await act(async () => opens[0]!.resolve({ kind: "opened", pdf: fake.pdf }));
+    await screen.findByTestId("pdf-canvas");
+    await waitFor(() => expect(screen.getByTestId("page-stage").dataset.renderStatus).toBe("ready"));
+  }
+
+  it("draws the feature and its evidence through the layout transform", async () => {
+    await openAssociation(SHA_A, association());
+    const scale = SCROLL_WIDTH / 595;
+    expect(layer()).not.toBeNull();
+    const ring = layer()!.querySelector<SVGPolygonElement>("polygon[data-role=circle]")!;
+    expect(ring.dataset.feature).toBe("true");
+    const points = ring.getAttribute("points")!.split(" ").map((p) => p.split(",").map(Number) as [number, number]);
+    for (const [x, y] of points) expect(Math.hypot(x - 200 * scale, y - 300 * scale)).toBeCloseTo(25 * scale, 1);
+    const leader = layer()!.querySelector("polyline[data-role=leader]")!;
+    expect(leader.getAttribute("points")).toBe(`${(265 * scale).toFixed(2)},${(300 * scale).toFixed(2)} ${(225 * scale).toFixed(2)},${(300 * scale).toFixed(2)}`);
+    expect(layer()!.querySelector("circle[data-role=arrow]")).not.toBeNull();
+  });
+
+  it("draws nothing for an unresolved association", async () => {
+    await openAssociation(SHA_A, association({ status: "unresolved", feature_id: null, feature: [], evidence: [] }));
+    expect(layer()).toBeNull();
+  });
+
+  it("draws nothing on a document that is not the one inspected", async () => {
+    await openAssociation(SHA_B, association());
+    expect(layer()).toBeNull();
+    expect(screen.getByTestId("evidence-status").textContent).toMatch(/not the document/);
+  });
+
+  it("draws nothing without a selection", async () => {
+    await openAssociation(SHA_A, null);
+    expect(layer()).toBeNull();
   });
 });

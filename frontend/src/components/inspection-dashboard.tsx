@@ -78,6 +78,21 @@ export function InspectionDashboard({ run, pdfSource }: InspectionDashboardProps
     const r = element.getBoundingClientRect();
     if (r.top < 0 || r.bottom > window.innerHeight) element.scrollIntoView({ block: "nearest" });
   }, [boxSeq, boxFinding]);
+  // A selected feature association, also tied to one report object.
+  const [associationChoice, setAssociationChoice] = useState<{ report: InspectionReport; id: string } | null>(null);
+  const association =
+    report !== null && associationChoice !== null && associationChoice.report === report
+      ? (report.feature_associations.find((a) => a.id === associationChoice.id) ?? null)
+      : null;
+  const chooseAssociation = useCallback(
+    (id: string) => {
+      if (report === null) return;
+      setAssociationChoice((current) =>
+        current !== null && current.report === report && current.id === id ? null : { report, id },
+      );
+    },
+    [report],
+  );
   const phase: InspectionPhase =
     state.status === "running"
       ? "running"
@@ -110,12 +125,22 @@ export function InspectionDashboard({ run, pdfSource }: InspectionDashboardProps
           selectedFindingId={active?.findingId ?? null}
           revealToken={active?.source === "finding" ? active.seq : null}
           onSelectFinding={(id) => choose(id, "box")}
+          association={association}
         />
         <section aria-labelledby="results-heading" aria-busy={state.status === "running"}>
           <h2 id="results-heading" className="mb-3 text-base font-semibold">
             Results
           </h2>
-          <Results state={state} stale={stale} canRun={valid !== null} selectedId={active?.findingId ?? null} onSelect={(id) => choose(id, "finding")} locations={locations} />
+          <Results
+            state={state}
+            stale={stale}
+            canRun={valid !== null}
+            selectedId={active?.findingId ?? null}
+            onSelect={(id) => choose(id, "finding")}
+            locations={locations}
+            associationId={association?.id ?? null}
+            onSelectAssociation={chooseAssociation}
+          />
         </section>
       </div>
     </div>
@@ -129,6 +154,8 @@ function Results({
   selectedId,
   onSelect,
   locations,
+  associationId,
+  onSelectAssociation,
 }: {
   state: InspectionState;
   stale: boolean;
@@ -136,13 +163,24 @@ function Results({
   selectedId: string | null;
   onSelect: (findingId: string) => void;
   locations: ReadonlyMap<string, FindingLocation>;
+  associationId: string | null;
+  onSelectAssociation: (id: string) => void;
 }) {
   switch (state.status) {
     case "running":
       return <ResultsSkeleton />;
     case "succeeded":
       if (stale) return <StaleResults canRun={canRun} />;
-      return <ReportView report={state.report} selectedId={selectedId} onSelect={onSelect} locations={locations} />;
+      return (
+        <ReportView
+          report={state.report}
+          selectedId={selectedId}
+          onSelect={onSelect}
+          locations={locations}
+          associationId={associationId}
+          onSelectAssociation={onSelectAssociation}
+        />
+      );
     case "idle":
       return <EmptyResults />;
     case "waiting":

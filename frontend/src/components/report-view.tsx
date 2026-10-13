@@ -13,11 +13,15 @@ export function ReportView({
   selectedId = null,
   onSelect = () => {},
   locations = new Map<string, FindingLocation>(),
+  associationId = null,
+  onSelectAssociation = () => {},
 }: {
   report: InspectionReport;
   selectedId?: string | null;
   onSelect?: (findingId: string) => void;
   locations?: ReadonlyMap<string, FindingLocation>;
+  associationId?: string | null;
+  onSelectAssociation?: (id: string) => void;
 }) {
   return (
     <div className="flex flex-col gap-6">
@@ -32,7 +36,13 @@ export function ReportView({
         locations={locations}
       />
       <MeasurementList measurements={report.measurements} />
-      <CadAnnotationList annotations={report.cad_annotations} unitNote={report.cad_unit_note ?? null} />
+      <CadAnnotationList
+        annotations={report.cad_annotations}
+        unitNote={report.cad_unit_note ?? null}
+        associations={report.feature_associations}
+        selectedAssociationId={associationId}
+        onSelectAssociation={onSelectAssociation}
+      />
       <UnrecognizedList annotations={report.unrecognized_annotations} />
       <DocumentPanel report={report} />
     </div>

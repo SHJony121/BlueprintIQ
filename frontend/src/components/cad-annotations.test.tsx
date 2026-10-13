@@ -1,6 +1,8 @@
 // @vitest-environment jsdom
 import { render, screen, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
+import type { FeatureAssociation } from "@/api/types";
 import { cadAnnotation, finding, makeReport, material } from "../../tests/ui/builders";
 import { interpretResponse, readReport } from "@/api/read-response";
 import { ReportView } from "./report-view";
@@ -232,5 +234,84 @@ describe("a stacked tolerance reconstructed from separate lines", () => {
     expect(interpretResponse(200, body((a) => (a.tolerance_source = "inline")), null).kind).toBe("malformed");
     expect(interpretResponse(200, body((a) => (a.tolerance_source = null)), null).kind).toBe("malformed");
     expect(interpretResponse(200, body((a) => delete a.tolerance_parts), null).kind).toBe("malformed");
+  });
+});
+
+describe("feature associations in the CAD section", () => {
+  const verified = (): FeatureAssociation => ({
+    id: "A1",
+    annotation_id: "C1",
+    page_number: 1,
+    relation: "linear_between_references",
+    status: "verified",
+    feature_id: "G1",
+    feature: [
+      { role: "extension_line", shape: "line", coords: [100, 195, 100, 230] },
+      { role: "extension_line", shape: "line", coords: [190, 195, 190, 230] },
+    ],
+    evidence: [
+      { role: "text", shape: "box", coords: [140, 188, 150, 200] },
+      { role: "dimension_line", shape: "line", coords: [100, 200, 190, 200] },
+    ],
+    candidates: 1,
+    explanation: "Verified: the dimension line beside the text ends in two terminators.",
+  });
+  const unresolved = (): FeatureAssociation => ({
+    id: "A2",
+    annotation_id: "C2",
+    page_number: 1,
+    relation: "diameter_of_circle",
+    status: "unresolved",
+    feature_id: null,
+    feature: [],
+    evidence: [],
+    candidates: 0,
+    explanation: "Association unresolved: no leader line starts at the text.",
+  });
+  const report = () =>
+    makeReport({
+      overrides: {
+        cad_annotations: [cadAnnotation("C1", "16"), cadAnnotation("C2", "Ø12", { dimension_kind: "diameter" })],
+        feature_associations: [verified(), unresolved()],
+      },
+    });
+
+  it("states what was identified and the evidence, or that the association is unresolved", () => {
+    render(<ReportView report={report()} />);
+    const good = screen.getByTestId("association-A1");
+    expect(good.textContent).toMatch(/Feature identified: Distance between two extension lines/);
+    expect(good.textContent).toMatch(/G1/);
+    expect(good.textContent).toMatch(/two terminators/);
+    const bad = screen.getByTestId("association-A2");
+    expect(bad.textContent).toMatch(/Association unresolved/);
+    expect(bad.textContent).toMatch(/no leader line starts at the text/);
+    expect(bad.getAttribute("data-status")).toBe("unresolved");
+  });
+
+  it("offers to show only a verified association on the drawing", async () => {
+    const picked: string[] = [];
+    render(<ReportView report={report()} onSelectAssociation={(id) => picked.push(id)} />);
+    expect(within(screen.getByTestId("association-A2")).queryByRole("button")).toBeNull();
+    await userEvent.click(within(screen.getByTestId("association-A1")).getByRole("button", { name: "Show on drawing" }));
+    expect(picked).toEqual(["A1"]);
+  });
+
+  it("marks the selected association and offers to hide it", () => {
+    render(<ReportView report={report()} associationId="A1" />);
+    const button = within(screen.getByTestId("association-A1")).getByRole("button", { name: "Hide on drawing" });
+    expect(button.getAttribute("aria-pressed")).toBe("true");
+  });
+
+  it("never presents a guess as verified: the reader rejects inconsistent associations", () => {
+    const body = (mutate: (a: Record<string, unknown>) => void) => {
+      const r = JSON.parse(JSON.stringify(report()));
+      mutate(r.feature_associations[0]);
+      return JSON.stringify(r);
+    };
+    expect(interpretResponse(200, body(() => {}), null).kind).toBe("report");
+    expect(interpretResponse(200, body((a) => (a.feature = [])), null).kind).toBe("malformed");
+    expect(interpretResponse(200, body((a) => (a.status = "unresolved")), null).kind).toBe("malformed");
+    expect(interpretResponse(200, body((a) => (a.annotation_id = "C9")), null).kind).toBe("malformed");
+    expect(interpretResponse(200, body((a) => ((a.feature as { coords: number[] }[])[0]!.coords = [1, 2])), null).kind).toBe("malformed");
   });
 });

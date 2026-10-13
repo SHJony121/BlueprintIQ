@@ -21,10 +21,12 @@ from blueprintiq.domain.models import (
 )
 from blueprintiq.extraction.annotation_parser import parse_lines
 from blueprintiq.extraction.cad_annotations import parse_cad_annotations
+from blueprintiq.extraction.feature_association import associate_features
 from blueprintiq.extraction.material_association import associate_materials
 from blueprintiq.extraction.stacked_beside import reconstruct_stacked_beside
 from blueprintiq.extraction.stacked_tolerance import reconstruct_stacked
 from blueprintiq.extraction.text_layer import extract_page_text
+from blueprintiq.extraction.vector_geometry import Scene, extract_scene
 from blueprintiq.ingestion.errors import (
     InvalidPdfError,
     NoTextLayerError,
@@ -53,6 +55,7 @@ class ExtractedText:
     lines: tuple[TextLine, ...]  # page by page, in displayed reading order
     hidden_lines: int
     angled_lines: tuple[TextLine, ...] = ()  # visible, written at an angle, never read
+    scene: Scene | None = None  # the vector geometry of the single page
 
 
 def extract_text(data: bytes, *, limits: IngestionLimits = DEFAULT_LIMITS) -> ExtractedText:
@@ -61,6 +64,7 @@ def extract_text(data: bytes, *, limits: IngestionLimits = DEFAULT_LIMITS) -> Ex
     lines: list[TextLine] = []
     hidden = 0
     angled: list[TextLine] = []
+    scene: Scene | None = None
     with _PYMUPDF_LOCK, open_pdf(data, limits) as doc:
         pymupdf.TOOLS.reset_mupdf_warnings()
         for index in range(doc.page_count):
@@ -74,6 +78,8 @@ def extract_text(data: bytes, *, limits: IngestionLimits = DEFAULT_LIMITS) -> Ex
             pages.append(result.page)
             lines.extend(result.lines)
             hidden += result.hidden_lines
+            if scene is None:
+                scene = _scene(doc.load_page(index))
             angled.extend(result.angled_lines)
         # MuPDF tolerates damaged content (e.g. a truncated compressed stream) and
         # may rebuild a broken file while reading it. Either way the text it returns
@@ -90,7 +96,11 @@ def extract_text(data: bytes, *, limits: IngestionLimits = DEFAULT_LIMITS) -> Ex
         )
     _refuse_angled_measurements(angled)
     return ExtractedText(
-        pages=tuple(pages), lines=tuple(lines), hidden_lines=hidden, angled_lines=tuple(angled)
+        pages=tuple(pages),
+        lines=tuple(lines),
+        hidden_lines=hidden,
+        angled_lines=tuple(angled),
+        scene=scene,
     )
 
 
@@ -106,6 +116,14 @@ def _refuse_angled_measurements(angled: list[TextLine]) -> None:
             "Text written at an angle contains a supported measurement label, which cannot "
             "be read, so the drawing cannot be inspected reliably."
         )
+
+
+def _scene(page: pymupdf.Page) -> Scene:
+    """The page's vector geometry; if MuPDF cannot read it, an empty, truncated scene."""
+    try:
+        return extract_scene(page)
+    except (RuntimeError, ValueError):
+        return Scene(truncated=True)
 
 
 def damage_warnings(warnings: str) -> list[str]:
@@ -128,6 +146,7 @@ def read_drawing(
     cad, unit_note = parse_cad_annotations(text.lines)
     cad = reconstruct_stacked(cad, text.lines, text.pages)
     cad = reconstruct_stacked_beside(cad, text.lines, text.pages, unit_note)
+    associations, geometry = associate_features(cad, text.scene or Scene(truncated=True))
     document = DocumentInfo(
         filename=_display_name(filename),
         sha256=hashlib.sha256(data).hexdigest(),
@@ -144,6 +163,8 @@ def read_drawing(
         angled_text_lines=len(text.angled_lines),
         cad_annotations=cad,
         unit_note=unit_note,
+        feature_associations=associations,
+        geometry_summary=geometry,
         skipped_lines=parsed.skipped_lines,
     )
 

@@ -1,4 +1,4 @@
-import type { CadAnnotation, SourceEvidence } from "@/api/types";
+import type { CadAnnotation, FeatureAssociation, SourceEvidence } from "@/api/types";
 import { ISSUE_LABEL, NBSP, formatBox } from "@/inspection/labels";
 import { ExtractionBadge } from "./status-badge";
 
@@ -23,11 +23,18 @@ const UNIT_TEXT = { mm: "mm", deg: "°" } as const;
 export function CadAnnotationList({
   annotations,
   unitNote,
+  associations = [],
+  selectedAssociationId = null,
+  onSelectAssociation = () => {},
 }: {
   annotations: readonly CadAnnotation[];
   unitNote: SourceEvidence | null;
+  associations?: readonly FeatureAssociation[];
+  selectedAssociationId?: string | null;
+  onSelectAssociation?: (id: string) => void;
 }) {
   if (annotations.length === 0) return null;
+  const byAnnotation = new Map(associations.map((x) => [x.annotation_id, x]));
   return (
     <section aria-labelledby="cad-heading" data-testid="cad-annotations">
       <h3 id="cad-heading" className="text-base font-semibold">
@@ -35,9 +42,10 @@ export function CadAnnotationList({
         <span className="font-normal text-muted">({annotations.length})</span>
       </h3>
       <p className="mt-1 text-sm text-muted">
-        Dimensions and tolerances read as written. They are not matched to any
-        feature of the part and no rule checks them, so they never produce a
-        pass or fail. A tolerance is attached to a value only when it is printed
+        Dimensions and tolerances read as written. No rule checks them, so they
+        never produce a pass or fail. Where the drawing&rsquo;s own lines prove
+        it, an annotation is tied to the geometry it refers to; that is a
+        statement about the drawing&rsquo;s graphics, not about the part. A tolerance is attached to a value only when it is printed
         on the same line, or when its separate lines can be tied to the value
         without doubt (a stacked tolerance, shown with each line as printed);
         otherwise it stays a separate, uncertain entry.
@@ -70,6 +78,11 @@ export function CadAnnotationList({
                 ))}
               </ul>
             )}
+            <AssociationNote
+              association={byAnnotation.get(a.id) ?? null}
+              selected={selectedAssociationId === byAnnotation.get(a.id)?.id}
+              onSelect={onSelectAssociation}
+            />
             <dl className="mt-2 grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-0.5 text-xs">
               <dt className="text-muted">Source text</dt>
               <dd className="font-mono break-words">
@@ -130,5 +143,56 @@ function Reading({ annotation: a }: { annotation: CadAnnotation }) {
         ({a.unit_source === "none" ? UNIT_FROM.none : UNIT_FROM[a.unit_source]})
       </span>
     </>
+  );
+}
+
+const RELATION_TEXT = {
+  diameter_of_circle: "Diameter of a drawn circle",
+  radius_of_arc: "Radius of a drawn arc or circle",
+  linear_between_references: "Distance between two extension lines",
+} as const;
+
+/** Whether the annotation is tied to drawing geometry, and the evidence either way. */
+function AssociationNote({
+  association,
+  selected,
+  onSelect,
+}: {
+  association: FeatureAssociation | null;
+  selected: boolean;
+  onSelect: (id: string) => void;
+}) {
+  if (association === null) return null;
+  const verified = association.status === "verified";
+  return (
+    <div
+      data-testid={`association-${association.id}`}
+      data-status={association.status}
+      className={`mt-2 rounded-md border border-line border-l-4 px-3 py-2 text-sm ${
+        verified ? "border-l-accent" : "border-l-review"
+      }`}
+    >
+      <p className="font-medium">
+        {verified
+          ? `Feature identified${association.relation ? `: ${RELATION_TEXT[association.relation]}` : ""}`
+          : association.status === "unsupported"
+            ? "Association not supported"
+            : "Association unresolved"}
+        {association.feature_id !== null && association.feature_id !== undefined ? (
+          <span className="ml-2 font-mono text-xs font-normal text-muted">{association.feature_id}</span>
+        ) : null}
+      </p>
+      <p className="mt-0.5 text-muted">{association.explanation}</p>
+      {verified ? (
+        <button
+          type="button"
+          aria-pressed={selected}
+          onClick={() => onSelect(association.id)}
+          className="mt-1.5 rounded-md border border-line bg-surface px-2.5 py-1 text-xs font-medium hover:border-accent aria-pressed:border-accent aria-pressed:text-accent"
+        >
+          {selected ? "Hide on drawing" : "Show on drawing"}
+        </button>
+      ) : null}
+    </div>
   );
 }

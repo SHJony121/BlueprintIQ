@@ -35,5 +35,7 @@ def inspect_drawing(
         skipped_angled_lines=drawing.angled_text_lines,
         cad_annotations=drawing.cad_annotations,
         cad_unit_note=drawing.unit_note,
+        feature_associations=drawing.feature_associations,
+        geometry_summary=drawing.geometry_summary,
         processing_time_ms=(time.perf_counter() - started) * 1000.0,
     )

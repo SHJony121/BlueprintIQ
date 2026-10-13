@@ -107,10 +107,19 @@ class TextRun:
 
 @dataclass(frozen=True)
 class Shape:
-    """Simple vector geometry in canonical space: 'rect' (x0,y0,x1,y1) or 'circle' (cx,cy,r)."""
+    """Simple vector geometry in canonical space.
+
+    'rect' (x0,y0,x1,y1) and 'circle' (cx,cy,r; four Beziers) as before, plus straight-line
+    kinds that CAD exports use: 'line' (x0,y0,x1,y1), 'dashed' (same, dashed), 'polyline' and
+    'polygon' (x,y,...; open / closed, stroked), 'fillpoly' (x,y,...; filled), 'polycircle'
+    (cx,cy,r,n; closed n-gon), 'polyarc' (cx,cy,r,a0_deg,a1_deg,n; open), 'dot'
+    (cx,cy,r,n; filled n-gon) and 'fused' (``subpaths`` stroked as one path).
+    """
 
     kind: str
     coords: tuple[float, ...]
+    # "fused" only: several open polylines (flat x y ... lists) stroked as ONE path.
+    subpaths: tuple[tuple[float, ...], ...] = ()
 
 
 @dataclass(frozen=True)
@@ -195,8 +204,53 @@ def _text_ops(run: TextRun, page: PageSpec) -> bytes:
     return b"\n".join(parts)
 
 
+def _poly_ops(points: list[tuple[float, float]], page: PageSpec, *, close: bool, paint: str) -> str:
+    crop = page.visible_box
+    xy = [(crop[0] + x, crop[3] - y) for x, y in points]
+    ops = [f"{_fmt(xy[0][0])} {_fmt(xy[0][1])} m"]
+    ops += [f"{_fmt(x)} {_fmt(y)} l" for x, y in xy[1:]]
+    if close:
+        ops.append("h")
+    ops.append(paint)
+    return " ".join(ops)
+
+
+def _pairs(coords: tuple[float, ...]) -> list[tuple[float, float]]:
+    return list(zip(coords[0::2], coords[1::2], strict=True))
+
+
+def _ngon(
+    cx: float, cy: float, r: float, n: int, a0: float = 0.0, a1: float = 360.0
+) -> list[tuple[float, float]]:
+    """n vertices on a circle: a closed polygon for a full turn, else an open arc (n + 1)."""
+    import math
+
+    full = abs(a1 - a0 - 360.0) < 1e-9
+    count = n if full else n + 1
+    angles = [math.radians(a0 + (a1 - a0) * i / n) for i in range(count)]
+    return [(cx + r * math.cos(t), cy + r * math.sin(t)) for t in angles]
+
+
 def _shape_ops(shape: Shape, page: PageSpec) -> bytes:
     crop = page.visible_box
+    kind = shape.kind
+    c = shape.coords
+    if kind in ("line", "dashed"):
+        ops = _poly_ops(_pairs(c), page, close=False, paint="S")
+        return (("[3 2] 0 d " + ops + " [] 0 d") if kind == "dashed" else ops).encode()
+    if kind in ("polyline", "polygon", "fillpoly"):
+        paint = "f" if kind == "fillpoly" else "S"
+        return _poly_ops(_pairs(c), page, close=kind != "polyline", paint=paint).encode()
+    if kind in ("polycircle", "dot"):
+        cx, cy, r, n = c
+        pts = _ngon(cx, cy, r, int(n))
+        return _poly_ops(pts, page, close=True, paint="f" if kind == "dot" else "S").encode()
+    if kind == "polyarc":
+        cx, cy, r, a0, a1, n = c
+        return _poly_ops(_ngon(cx, cy, r, int(n), a0, a1), page, close=False, paint="S").encode()
+    if kind == "fused":
+        parts = [_poly_ops(_pairs(sp), page, close=False, paint="") for sp in shape.subpaths]
+        return (" ".join(parts) + " S").encode()
     if shape.kind == "rect":
         x0, y0, x1, y1 = shape.coords
         values = (crop[0] + x0, crop[3] - y1, x1 - x0, y1 - y0)
