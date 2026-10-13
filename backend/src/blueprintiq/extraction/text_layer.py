@@ -34,7 +34,13 @@ from typing import Any, NamedTuple
 import pymupdf
 
 from blueprintiq.domain.geometry import page_to_viewer
-from blueprintiq.domain.models import PAGE_BOUNDS_TOLERANCE_PT, BBox, PageInfo, TextLine
+from blueprintiq.domain.models import (
+    PAGE_BOUNDS_TOLERANCE_PT,
+    BBox,
+    PageInfo,
+    TextLine,
+    TextWord,
+)
 from blueprintiq.ingestion.errors import (
     InvalidPdfError,
     PageTooComplexError,
@@ -45,6 +51,7 @@ from blueprintiq.ingestion.errors import (
 from blueprintiq.ingestion.limits import IngestionLimits
 from blueprintiq.ingestion.pdf_loader import ENGINE_ERRORS
 
+_SIGNS = "+-" + chr(0x2212)  # plus, hyphen-minus, minus sign
 GAP_SPLIT_EM = 2.0
 MIN_VISIBLE_SIZE_PT = 1.0  # smaller text is not legible evidence
 CLIP_TOLERANCE_ALONG_PT = 0.5  # along the writing direction: a cut glyph changes the text
@@ -149,7 +156,15 @@ def extract_page_text(
                     "cannot be read reliably."
                 )
             text = "".join(ch.text for ch in segment)
-            lines.append(TextLine(text=text, page_number=page_number, bbox=box))
+            lines.append(
+                TextLine(
+                    text=text,
+                    page_number=page_number,
+                    bbox=box,
+                    words=_words(segment),
+                    writing=direction,
+                )
+            )
             if len(lines) > max_lines:
                 raise TooManyTextLinesError(
                     "The drawing has more text lines than the supported limit."
@@ -553,6 +568,27 @@ def _engine[T](call: Callable[[], T]) -> T:
         return call()
     except ENGINE_ERRORS:
         raise InvalidPdfError("A page of the PDF could not be read.") from None
+
+
+def _words(segment: Sequence[PositionedChar]) -> tuple[TextWord, ...]:
+    """Split a line at whitespace; each word keeps the union of its glyph boxes."""
+    words: list[TextWord] = []
+    current: list[PositionedChar] = []
+    for ch in [*segment, None]:
+        if ch is not None and not ch.text.isspace():
+            current.append(ch)
+            continue
+        if current:
+            sign = current[0].text in _SIGNS and len(current) > 1
+            words.append(
+                TextWord(
+                    text="".join(c.text for c in current),
+                    bbox=_union(current),
+                    number_bbox=_union(current[1:] if sign else current),
+                )
+            )
+            current = []
+    return tuple(words)
 
 
 def _union(segment: Sequence[PositionedChar]) -> BBox:

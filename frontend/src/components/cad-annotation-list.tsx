@@ -37,8 +37,10 @@ export function CadAnnotationList({
       <p className="mt-1 text-sm text-muted">
         Dimensions and tolerances read as written. They are not matched to any
         feature of the part and no rule checks them, so they never produce a
-        pass or fail. A tolerance is shown only if it is on the same line as its
-        value.
+        pass or fail. A tolerance is attached to a value only when it is printed
+        on the same line, or when its separate lines can be tied to the value
+        without doubt (a stacked tolerance, shown with each line as printed);
+        otherwise it stays a separate, uncertain entry.
       </p>
       {unitNote !== null && (
         <p className="mt-1 text-sm text-muted">

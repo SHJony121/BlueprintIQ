@@ -91,6 +91,9 @@ describe("the CAD annotations section", () => {
     expect(screen.getByTestId("cad-annotations").textContent).toMatch(
       /never produce a pass or fail/,
     );
+    const cad = screen.getByTestId("cad-annotations").textContent ?? "";
+    expect(cad).toMatch(/stacked tolerance/);
+    expect(cad).not.toMatch(/only if it is on the same line/);
     expect(
       screen.getByRole("heading", { name: /^Findings \(1\)/ }),
     ).toBeTruthy();
