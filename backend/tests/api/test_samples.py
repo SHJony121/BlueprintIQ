@@ -37,7 +37,7 @@ def inspect(api: TestClient, name: str) -> InspectionReport:
 
 def test_committed_samples_match_the_generator_byte_for_byte() -> None:
     rendered = GEN.render()
-    assert len(rendered) == 2
+    assert len(rendered) == 4
     stale = [p.name for p, data in rendered.items() if not p.exists() or p.read_bytes() != data]
     assert stale == [], f"run scripts/generate_samples.py; stale: {stale}"
 
@@ -75,3 +75,39 @@ def test_the_cad_sample_shows_verified_stacked_and_unresolved_dimensions(api: Te
         "30": "unresolved",
     }
     assert any(a.relation.value == "diameter_of_circle" for a in report.feature_associations)
+
+
+def test_the_features_sample_ties_a_radius_and_reports_an_angle_as_unsupported(
+    api: TestClient,
+) -> None:
+    report = inspect(api, GEN.FEATURES)
+    assert report.summary.passed == 4 and report.summary.failed == 0
+    texts = {a.id: a.source.raw_text for a in report.cad_annotations}
+    kinds = {a.source.raw_text: a.dimension_kind for a in report.cad_annotations}
+    assert kinds == {
+        "R30": "radius",
+        "Ø12 ±0.05": "diameter",
+        "45° ±0.5°": "angle",
+        "160 +0.2/-0.1": "linear",
+    }
+    found = {
+        texts[a.annotation_id]: (a.status.value, a.relation) for a in report.feature_associations
+    }
+    assert found["R30"] == ("verified", "radius_of_arc")
+    assert found["Ø12 ±0.05"] == ("verified", "diameter_of_circle")
+    assert found["160 +0.2/-0.1"] == ("verified", "linear_between_references")
+    assert found["45° ±0.5°"][0] == "unsupported"
+
+
+def test_the_review_sample_asks_for_a_person_instead_of_guessing(api: TestClient) -> None:
+    report = inspect(api, GEN.REVIEW)
+    outcomes = {f.rule_id: f.status.value for f in report.findings}
+    assert outcomes == {
+        "THK-MIN-001": "needs_review",  # "THICKNESS: 4" has no unit
+        "DIA-MAX-001": "needs_review",  # "2,5 mm" uses a comma decimal
+        "LEN-RANGE-001": "pass",
+        "MAT-REQ-001": "needs_review",  # two different materials
+    }
+    assert report.summary.failed == 0  # nothing ambiguous is turned into a fail or a pass
+    assert all(a.status.value == "ambiguous" for a in report.cad_annotations)
+    assert len(report.feature_associations) == 0  # ambiguous annotations are not associated

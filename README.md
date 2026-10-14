@@ -4,7 +4,7 @@
 
 > **Assistive prototype, not certified compliance software.** BlueprintIQ does not guarantee engineering safety, regulatory compliance, or manufacturing correctness. The rule thresholds shipped here are **demonstration values**, not industry or company standards. Findings must be reviewed by a qualified person.
 
-> **Status:** a working **local full-stack MVP** (FastAPI backend plus Next.js frontend with a PDF viewer). It is verified against **synthetic fixtures only**; real industrial CAD PDFs, embedded fonts and Japanese drawings have not been tested. It is for **trusted local use**; public deployment is blocked (see [Security](docs/security-and-deployment.md)). The repository is private; the code is licensed under AGPL-3.0-or-later.
+> **Status:** a working **local full-stack MVP** (FastAPI backend plus Next.js frontend with a PDF viewer). It is verified against **synthetic fixtures only**; real industrial CAD PDFs, embedded fonts and Japanese drawings have not been tested. It is not yet deployed publicly (see [deployment](docs/deployment.md) and [Security](docs/security-and-deployment.md)). The code is licensed under AGPL-3.0-or-later.
 
 ## What it does
 
@@ -17,6 +17,61 @@ PDF drawing ─▶ validated text lines with page-space boxes ─▶ typed measu
 * **Traceable.** Each finding cites the measurements it used; each measurement carries its raw text, page number and bounding box.
 * **Exact.** All numbers are `Decimal`. Unit conversion (mm, cm, m, in) is exact; JSON carries numbers as strings.
 
+## Try BlueprintIQ yourself
+
+There is **no public live demo yet** (a free-hosting trial is prepared but not deployed). Run it locally with the [Quick start](#quick-start-backend-and-frontend-local-only) below; it takes a few minutes. Then use these sample drawings. They are **original synthetic drawings made for this project** (invented parts and numbers, no third-party content), and every expected result below was checked against the running application. The same results are locked in by tests (`backend/tests/api/test_samples.py`), so they cannot drift silently.
+
+| Sample | What it shows | Expected result with the demonstration limits |
+|---|---|---|
+| **A. Labelled plate**<br>[download PDF](frontend/public/samples/blueprintiq-sample-basic.pdf) | Labelled notes (`THICKNESS: 2.5 mm`, `DIAMETER`, `LENGTH`, `MATERIAL`) checked against rules | **3 Pass, 1 Fail.** Thickness 2.5 mm is below the 3 mm demonstration minimum. |
+| **B. CAD-style plate**<br>[download PDF](frontend/public/samples/blueprintiq-sample-cad.pdf) | Real dimension graphics: extension lines, arrowheads, a leader to a hole, a `±` tolerance and a tolerance stacked on two lines | **4 Pass** from the labelled notes. Separately, 5 CAD dimensions read: `120`, `88 ±0.1`, `60 +0/-0.2` (stacked), `Ø20` **tied to the lines they refer to**; `30` **unresolved** (its line has no arrowheads or extension lines). |
+| **C. Radius, tolerances and an angle**<br>[download PDF](frontend/public/samples/blueprintiq-sample-features.pdf) | A rounded corner with an `R30` leader, a toleranced hole `Ø12 ±0.05`, an asymmetric tolerance `160 +0.2/-0.1`, a chamfer angle | **4 Pass.** `R30` tied to the drawn arc, `Ø12 ±0.05` to the circle, `160 +0.2/-0.1` to its extension lines. `45° ±0.5°` is read, but its association is reported as **not supported** (angles are out of scope). |
+| **D. Annotations that need a person**<br>[download PDF](frontend/public/samples/blueprintiq-sample-review.pdf) | Values that must not be guessed: no unit, a comma decimal, two different materials, a dimension with no unit note, a lone tolerance fragment | **1 Pass, 3 Needs review, 0 Fail.** `THICKNESS: 4` (no unit), `DIAMETER: 2,5 mm` (comma decimal) and `S235JR` vs `S355J2` (two materials) all need review. The CAD lines `Ø12 ±0.05` and `+0.1` stay **ambiguous** and are not tied to any geometry. |
+
+Samples A and B are also offered by the **Try a sample** buttons in the app; C and D you upload like any file.
+
+### Walkthrough (no engineering background needed)
+
+1. **Download a sample** from the table, for example sample B.
+2. **Open BlueprintIQ:** start it with the [Quick start](#quick-start-backend-and-frontend-local-only) and go to <http://127.0.0.1:3000/inspect>.
+3. **Choose the drawing:** drop the PDF on the upload area or click *choose a file* (or press *Inspect "CAD-style plate"* under **Try a sample**).
+4. **Limits:** the *Inspection requirements* start at the demonstration values (minimum thickness 3 mm, maximum diameter 50 mm, length 10 to 500 mm, a material must be written). They are examples, not engineering standards; open the panel to change them.
+5. **Run:** choosing a file runs the inspection at once. After changing a limit, press **Run inspection** or **Run again**.
+6. **Read what was extracted:** *Extracted measurements* lists the labelled values with their source text; *CAD annotations* lists the dimensions and tolerances exactly as written, with how each value and tolerance was read.
+7. **Read the findings:** the summary shows how many rules ended as **Fail**, **Needs review**, **Missing** or **Pass**; each finding states the rule, the expected and actual values and the measurement it used. Only the outcomes the drawing really produces appear.
+8. **See the evidence on the drawing** (on a screen at least 1024 px wide): every finding has a box where its text was read. In *CAD annotations*, press **Show on drawing** to see the lines a verified dimension is tied to.
+
+### What a result looks like
+
+**A finding with its evidence.** Sample A: the thickness rule fails, and the box on the drawing is the exact text it was read from.
+
+![Sample A: the failing thickness finding and its evidence box on the drawing](docs/screenshots/readme-1-basic-fail.png)
+
+**A dimension tied to the drawing.** Sample B: `Ø20` is tied to the drawn circle because its leader ends in an arrowhead on the circle, pointing along a radius. The `30` next to it is listed as unresolved, with the reason.
+
+![Sample B: the diameter association drawn on the page, and an unresolved dimension with its reason](docs/screenshots/readme-2-cad-association.png)
+
+More: [the stacked tolerance in sample B](docs/screenshots/readme-3-stacked-tolerance.png) (two separate printed lines reconstructed as `60 +0 / -0.2`, each shown as printed) and [the radius in sample C](docs/screenshots/readme-5-radius-angle.png) (tied to the rounded corner; the angle is read but not associated).
+
+### Why "Needs review" matters
+
+A drawing that says `THICKNESS: 4` does not say 4 *what*. A tool that assumed millimetres would pass it against a 3 mm minimum, and would be wrong if the drawing meant something else. BlueprintIQ does not guess: sample D gives **3 Needs review and 0 Fail**, and the one Pass is the only value written unambiguously (`LENGTH: 120 mm`).
+
+![Sample D: three findings need review, one passes, none is guessed](docs/screenshots/readme-4-needs-review.png)
+
+### Rule findings and geometry associations are different things
+
+| | Rule findings | Geometry associations |
+|---|---|---|
+| Comes from | Labelled notes such as `THICKNESS: 4 mm` | CAD dimensions such as `Ø20` or `88 ±0.1` and the drawing's vector lines |
+| Answers | Does this value meet the limit? | Which drawn lines or circle does this dimension refer to? |
+| Outcomes | Pass, Fail, Missing, Needs review | Verified, Unresolved (with the reason), Not supported |
+| Can it fail a part? | Yes, against your limits | Never: it is a statement about the drawing's graphics, not about the part |
+
+**New to engineering drawings?** A *dimension* is a measurement printed on the drawing. Its *tolerance* is how far the real part may differ (`±0.1`, or `+0` above `-0.2` printed as a *stacked* tolerance). *Extension lines* run from the part out to the *dimension line*, whose arrowheads mark what is measured; a *leader* is a line from a note to a feature such as a hole.
+
+**Other test drawings.** No third-party drawings are recommended here: none were found whose licence clearly allows redistribution and whose results were verified. Any one-page PDF with selectable text works as an upload; scans do not.
+
 ## What works today (verified) and what does not
 
 **Verified in this repository** (synthetic fixtures; see Testing):
@@ -27,7 +82,7 @@ PDF drawing ─▶ validated text lines with page-space boxes ─▶ typed measu
 * The PDF rendered in the browser (PDF.js) with an evidence box on the exact text each finding relied on, correct for page rotation (0/90/180/270), crop boxes, zoom and screen pixel density.
 * Selecting a finding highlights its boxes and selecting a box selects its finding, by mouse and keyboard.
 
-**Not done:** real-CAD benchmarking, multi-page documents, scanned drawings, authentication, rate limiting, deployment, report export, any AI model. See [Known limitations](#known-limitations).
+**Not done:** real-CAD benchmarking, multi-page documents, scanned drawings, authentication, public deployment, report export, any AI model. See [Known limitations](#known-limitations).
 
 ## Quick start (backend and frontend, local only)
 
@@ -46,7 +101,7 @@ npm run build
 npm run start          # http://127.0.0.1:3000  (or: npm run dev)
 ```
 
-Open <http://127.0.0.1:3000>. The browser only talks to the Next.js app; its server-side proxy forwards uploads to the backend at `http://127.0.0.1:8000` (change with the server-only `BLUEPRINTIQ_BACKEND_URL`, which must be a loopback IP).
+Open <http://127.0.0.1:3000> (the tool itself is at `/inspect`). The browser only talks to the Next.js app; its server-side proxy forwards uploads to the backend at `http://127.0.0.1:8000` (change with the server-only `BLUEPRINTIQ_BACKEND_URL`, which must be a loopback IP).
 
 **Start both only through these commands.** `npm run dev` and `npm run start` bind Next.js to `127.0.0.1`; Next's own default is every network interface, so `npx next start` would expose the unauthenticated backend through the proxy. The proxy's `Host`/`Origin` checks defend against web pages, not other machines, and do not replace the binding. Keep uvicorn on `127.0.0.1` too.
 
