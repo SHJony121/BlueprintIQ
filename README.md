@@ -201,7 +201,7 @@ Full list: [docs/testing-and-evaluation.md](docs/testing-and-evaluation.md#limit
 
 ## Security and release restrictions
 
-**Public deployment is blocked.** Launch-1 added production hardening and a container (allow-listed hosts, trusted-proxy client identity, per-client rate and concurrency limits, security headers, no diagnostic or docs endpoints, worker cancellation on disconnect); see [docs/deployment.md](docs/deployment.md). It is not deployed. Remaining blockers include a public source repository for the AGPL source offer, a chosen host with TLS, Linux worker-memory measurements, and real CAD PDFs not being benchmarked. Without the production settings the app is for trusted local use only. The licence is **AGPL-3.0-or-later** (see [Licence](#licence)). See [docs/security-and-deployment.md](docs/security-and-deployment.md).
+**Public deployment is blocked.** Launch-1 added production hardening and a container (allow-listed hosts, trusted-proxy client identity, per-client rate and concurrency limits, security headers, no diagnostic or docs endpoints, worker cancellation on disconnect); see [docs/deployment.md](docs/deployment.md). It is not deployed. Remaining blockers include a public source repository for the AGPL source offer, a chosen host with TLS (Linux resource measurements are in the free-hosting document), and real CAD PDFs not being benchmarked. Without the production settings the app is for trusted local use only. The licence is **AGPL-3.0-or-later** (see [Licence](#licence)). See [docs/security-and-deployment.md](docs/security-and-deployment.md). Linux resource measurements at Render Free-sized limits (512 MiB, 0.1 CPU) and the free-hosting assessment are in [docs/free-hosting.md](docs/free-hosting.md).
 
 ## Licence
 

@@ -23,6 +23,9 @@ export const DEFAULTS = Object.freeze({
   BLUEPRINTIQ_JOB_TIMEOUT_S: "30",
   BLUEPRINTIQ_UPLOAD_TIMEOUT_S: "30",
   BLUEPRINTIQ_QUEUE_TIMEOUT_S: "15",
+  // Every job is still its own new process; "forkserver" forks it from a helper that has already
+  // imported the libraries. Measured at 0.1 CPU: about 10 s of start-up CPU per job becomes ~0.1 s.
+  BLUEPRINTIQ_WORKER_START_METHOD: "forkserver",
 });
 
 const isLoopback = (address) => /^127\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(address) || address === "::1";
@@ -89,6 +92,9 @@ export function readLaunchConfig(env) {
       errors.push(`${name} must be a positive number of seconds`);
     }
   }
+  if (!["spawn", "forkserver"].includes(get("BLUEPRINTIQ_WORKER_START_METHOD"))) {
+    errors.push("BLUEPRINTIQ_WORKER_START_METHOD must be spawn or forkserver");
+  }
   if (errors.length > 0) return { ok: false, errors };
 
   const shared = {
@@ -111,6 +117,7 @@ export function readLaunchConfig(env) {
         BLUEPRINTIQ_JOB_TIMEOUT_S: get("BLUEPRINTIQ_JOB_TIMEOUT_S"),
         BLUEPRINTIQ_UPLOAD_TIMEOUT_S: get("BLUEPRINTIQ_UPLOAD_TIMEOUT_S"),
         BLUEPRINTIQ_QUEUE_TIMEOUT_S: get("BLUEPRINTIQ_QUEUE_TIMEOUT_S"),
+        BLUEPRINTIQ_WORKER_START_METHOD: get("BLUEPRINTIQ_WORKER_START_METHOD"),
       },
       frontendEnv: {
         BLUEPRINTIQ_BACKEND_URL: `http://127.0.0.1:${backendPort}`,
