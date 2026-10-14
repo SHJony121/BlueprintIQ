@@ -25,7 +25,7 @@ docker run --rm --init --read-only --tmpfs /tmp --memory 1536m -p 8080:8080 \
 
 * `--build-arg SITE_URL=https://<public origin>` is optional: it gives the social-preview image an absolute address. Without it no preview image is linked (nothing points at localhost).
 * The build **fails** unless `SOURCE_URL` is an `https` address (AGPL section 13; the footer links it). `deploy/verify-source-url.mjs <url> --online` additionally checks that anonymous visitors can read it; a private repository fails that check.
-* Python dependencies are installed from `backend/uv.lock` with `pip --require-hashes`; Node dependencies with `npm ci`. Base images are pinned by tag only; pin them by digest when the release image is built.
+* Python dependencies are installed from `backend/uv.lock` with `pip --require-hashes`; Node dependencies with `npm ci`. Base images are pinned by digest.
 * The container runs as UID 10001, needs only a writable `/tmp`, and contains no PDFs other than the two original sample drawings, and no secrets or env files. Do not bake secrets into the image; there are none to supply.
 
 ## Settings
@@ -45,6 +45,8 @@ The container refuses to start (exit code 2, reason printed) when a setting is i
 | `BLUEPRINTIQ_MAX_CONCURRENT_JOBS` | `1` | Inspection workers running at once. |
 | `BLUEPRINTIQ_MAX_ADMITTED_REQUESTS` | `3` | Requests admitted at once (running + waiting); more get `503 SERVER_BUSY`. |
 | `BLUEPRINTIQ_WORKER_START_METHOD` | `forkserver` | `forkserver` or `spawn`: how each job's new process is started. |
+| `BLUEPRINTIQ_JOB_DATA_LIMIT_MB` | derived | Cap on a worker's private memory (Linux). Unset: container limit minus 300 MiB, at least 192 MiB (212 MiB at 512 MiB); `0` turns it off. |
+| `BLUEPRINTIQ_WORKER_PREFER_OOM_VICTIM` | `1` | The worker asks the kernel to stop it first if the container runs out of memory. |
 | `BLUEPRINTIQ_JOB_MEMORY_LIMIT_MB` | `1024` | Address-space limit per worker (`RLIMIT_AS`, Linux). |
 | `BLUEPRINTIQ_JOB_TIMEOUT_S` / `_UPLOAD_TIMEOUT_S` / `_QUEUE_TIMEOUT_S` | `30` / `30` / `15` | Worker run time, time allowed to receive the upload, time allowed to wait for a free worker. |
 | `BLUEPRINTIQ_BACKEND_ALLOW_PRIVATE` | unset | `1` lets `BLUEPRINTIQ_BACKEND_URL` be a private-network IP (RFC 1918). Not needed in this container. |
@@ -93,12 +95,12 @@ The project budget is **$0**: no paid host and no billing account. Render's free
 1. **Public source URL (AGPL section 13).** The repository is private. A public deployment needs a public, anonymously readable repository (or equivalent source archive) of the exact version it runs, passed as `SOURCE_URL`. Making the repository public is a separate decision (check history for secrets and personal data first). A private repository does not satisfy the licence.
 2. **Host and TLS.** No host is chosen. TLS and the public host name come from the platform; set `BLUEPRINTIQ_ALLOWED_HOSTS` and the proxy hop count to match it, and test the real `X-Forwarded-For` behaviour there.
 3. **Real-host check:** the Linux measurements were taken on a CI runner with Render-sized limits; confirm start-up, one real upload and the sign-up flow on the chosen host.
-4. **First container build in CI** (the CI job above) must pass; image digests should be pinned for the release.
+4. **First container build in CI** (the CI job above) must pass; base images are now pinned by digest (`deploy/refresh-digests.sh` prints the current ones to paste in; a pinned digest gets no base-image security updates until it is refreshed, so refresh and re-run CI before each release).
 5. No authentication, abuse reporting or privacy notice exists; decide whether the anonymous-upload site needs them before launch.
 6. **Source URL verification stays a launch requirement:** run `node deploy/verify-source-url.mjs <url> --online` against the exact `SOURCE_URL` before any public launch; it must pass.
 7. **Render itself has not been tested.** The 512 MiB / 0.1 CPU numbers come from a simulated limit on a CI runner. Compatibility with Render Free is not claimed.
-8. **Resource exhaustion by hostile or unusually memory-hungry PDFs is unvalidated.** The 1 GiB worker address-space limit is above the 512 MiB container limit, so such a file could exhaust the container before the limit applies. This must be tested (and the limit reconsidered) before public anonymous uploads.
-9. **Fork-server failure and cleanup paths need more testing.** The worker tests run under both start methods, but the test that injects a startup failure through the environment is skipped for the fork server. Still to be exercised: the fork server dying or hanging while the API runs, a worker outliving a killed API, leaked processes after many kills, and a start-up failure inside a fork-server child.
+8. **Hostile PDFs aimed at memory: partly addressed.** Launch-4A added a container-aware private-memory cap and an out-of-memory priority for workers and showed, with a generic memory-hungry job at 512 MiB, that the service stays up and answers a controlled `resource_limit` ([free-hosting.md](free-hosting.md)). Still untested: what particular malformed or adversarial PDFs do inside the PDF engine. Test with the cap in place before public anonymous uploads.
+9. **Fork-server failure and cleanup: tested, with gaps.** Killed and hung fork servers, repeated worker kills, client disconnects, shutdown and a killed API process are covered (Linux CI and the `resilience` workflow). Not covered: a fork server that dies in the middle of starting a worker under load, and long-running leak checks.
 10. **Budget:** the project budget is strictly $0 and no billing details will be entered; any host that asks for a card is out.
 
 ## Dependency maintenance

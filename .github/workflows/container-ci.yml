@@ -20,6 +20,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Base images are pinned by digest
+        run: |
+          grep -E '^ARG (NODE|PYTHON)_IMAGE=.*@sha256:[0-9a-f]{64}$' Dockerfile | wc -l | grep -qx 2
+
       - name: Build refuses a missing or non-https source URL
         run: |
           ! docker build -t blueprintiq:nosrc . 2>/dev/null
