@@ -22,8 +22,10 @@ API server. Guarantees are tested in tests/api/test_worker.py.
 """
 
 import json
+import logging
 import multiprocessing
 import os
+import signal
 import sys
 import threading
 import time
@@ -42,6 +44,12 @@ _KILL_GRACE_S = 5.0
 _MAX_RESULT_BYTES = 64 * 1024 * 1024
 _WATCHDOG_EXIT = 70  # exit code when the child's own watchdog fires
 _POLL_S = 0.2  # how often a running job looks at its cancel flag
+# How long starting a worker may take before the fork server is treated as unavailable. It must
+# outlast the fork server's own first start-up (it imports the libraries before it accepts), which
+# takes about 20 s on a tenth of a CPU.
+_START_TIMEOUT_S = 45.0
+_METHOD = "spawn"  # the start method in use ("forkserver" falls back to "spawn" on failure)
+_LOG = logging.getLogger("blueprintiq")
 
 Kind = Literal["ok", "rejected", "timeout", "crashed", "resource_limit", "error", "cancelled"]
 
@@ -62,7 +70,7 @@ def use_start_method(method: str) -> str:
     ``forkserver`` falls back to ``spawn`` where the platform has none (Windows). Call it
     before the first job: the fork server starts on first use and imports ``_PRELOAD`` then.
     """
-    global _CONTEXT
+    global _CONTEXT, _METHOD
     if method == "forkserver" and "forkserver" in multiprocessing.get_all_start_methods():
         context = multiprocessing.get_context("forkserver")
         context.set_forkserver_preload(_PRELOAD)
@@ -70,9 +78,54 @@ def use_start_method(method: str) -> str:
         from multiprocessing import forkserver  # not importable on Windows
 
         forkserver.ensure_running()  # import in the background now, not on the first request
+        _METHOD = "forkserver"
         return "forkserver"
     _CONTEXT = multiprocessing.get_context("spawn")
+    _METHOD = "spawn"
     return "spawn"
+
+
+def _abandon_fork_server(reason: str) -> None:
+    """Stop using the fork server: end it if it is running, and start every later job by spawn.
+
+    A job that could not be started has not run, so it is safe to start it again by spawn.
+    """
+    if _METHOD == "forkserver":
+        _LOG.warning(
+            "fork server unavailable, using spawn", extra={"event": "worker", "detail": reason}
+        )
+        try:
+            from multiprocessing import forkserver  # not importable on Windows
+
+            pid = getattr(forkserver._forkserver, "_forkserver_pid", None)
+            if isinstance(pid, int) and sys.platform != "win32":
+                os.kill(pid, signal.SIGKILL)
+        except (ImportError, OSError, AttributeError):
+            pass
+    use_start_method("spawn")
+
+
+def _start(process: Any) -> bool:
+    """Start ``process``; False if the fork server failed or took too long (_START_TIMEOUT_S)."""
+    failure: list[BaseException] = []
+
+    def go() -> None:
+        try:
+            process.start()
+        except BaseException as exc:  # reported to the caller below
+            failure.append(exc)
+
+    thread = threading.Thread(target=go, daemon=True, name="worker-start")
+    thread.start()
+    thread.join(_START_TIMEOUT_S)
+    if thread.is_alive() or failure:
+        if _METHOD != "forkserver":
+            if failure:
+                raise failure[0]  # spawn itself failed: not something to paper over
+            raise TimeoutError("starting a worker process timed out")
+        _abandon_fork_server("start timed out" if thread.is_alive() else type(failure[0]).__name__)
+        return False
+    return True
 
 
 def run_job(
@@ -81,6 +134,8 @@ def run_job(
     *,
     timeout_s: float,
     memory_limit_mb: int | None,
+    data_limit_mb: int | None = None,
+    prefer_oom_victim: bool = False,
     cancel: threading.Event | None = None,
 ) -> JobResult:
     """Run ``job(*args)`` in a new process; never raises for problems inside the job.
@@ -89,11 +144,16 @@ def run_job(
     must return a JSON-serializable value. If ``cancel`` is set while the job runs (the
     client went away), the process is killed at once and the result is ``cancelled``.
     """
+    child_args = (job, args, memory_limit_mb, data_limit_mb, prefer_oom_victim, timeout_s)
     receive, send = _CONTEXT.Pipe(duplex=False)
-    process = _CONTEXT.Process(
-        target=_child, args=(send, job, args, memory_limit_mb, timeout_s), daemon=True
-    )
-    process.start()
+    process = _CONTEXT.Process(target=_child, args=(send, *child_args), daemon=True)
+    if not _start(process):
+        # The fork server could not start the worker. Nothing has run: start it by spawn.
+        receive.close()
+        send.close()
+        receive, send = _CONTEXT.Pipe(duplex=False)
+        process = _CONTEXT.Process(target=_child, args=(send, *child_args), daemon=True)
+        process.start()
     send.close()  # only the child writes
     raw: bytes | None = None
     try:
@@ -156,12 +216,16 @@ def _child(
     job: Callable[..., Any],
     args: tuple[Any, ...],
     memory_limit_mb: int | None,
+    data_limit_mb: int | None,
+    prefer_oom_victim: bool,
     timeout_s: float,
 ) -> None:
     _start_watchdog(timeout_s)
     try:
-        if memory_limit_mb is not None:
-            _limit_memory(memory_limit_mb)
+        if prefer_oom_victim:
+            _prefer_oom_victim()
+        if memory_limit_mb is not None or data_limit_mb is not None:
+            _limit_memory(memory_limit_mb, data_limit_mb)
         try:
             outcome: dict[str, Any] = {"kind": "ok", "value": job(*args)}
         except DocumentRejectedError as exc:
@@ -203,13 +267,69 @@ def _start_watchdog(timeout_s: float) -> None:
     threading.Thread(target=watch, daemon=True, name="deadline-watchdog").start()
 
 
-def _limit_memory(megabytes: int) -> None:
+def _limit_memory(address_space_mb: int | None, data_mb: int | None = None) -> None:
+    """Cap the address space (RLIMIT_AS) and, if given, the private writable memory (RLIMIT_DATA).
+
+    The address space counts every mapped library, so it is a loose bound. The data limit counts
+    what a job allocates (heap and private mappings), which is what fills a container.
+    """
     if sys.platform == "win32":
         return  # not supported on Windows; documented limitation
     import resource
 
-    limit = megabytes * 1024 * 1024
-    resource.setrlimit(resource.RLIMIT_AS, (limit, limit))
+    if address_space_mb is not None:
+        limit = address_space_mb * 1024 * 1024
+        resource.setrlimit(resource.RLIMIT_AS, (limit, limit))
+    if data_mb is not None:
+        limit = data_mb * 1024 * 1024
+        resource.setrlimit(resource.RLIMIT_DATA, (limit, limit))
+
+
+def _prefer_oom_victim() -> None:
+    """Make the kernel out-of-memory killer choose this worker before any other process.
+
+    Raising a process own oom_score_adj needs no privilege. If memory runs out anyway, the
+    disposable worker dies, not the API server, the web server or the supervisor.
+    """
+    try:
+        with open("/proc/self/oom_score_adj", "w") as handle:
+            handle.write("1000")
+    except OSError:
+        pass  # not Linux, or not permitted: the other limits still apply
+
+
+# Memory kept for everything that is not a worker when the data limit is derived from the
+# container limit: measured peaks of the API server, web server, fork server and held upload
+# bodies came to about 270 MiB (docs/free-hosting.md).
+_RESERVE_MB = 300
+_MIN_DATA_MB = 192
+
+
+def cgroup_memory_limit_mb() -> int | None:
+    """The container memory limit in MiB (cgroup v2), or None if there is none."""
+    try:
+        with open("/sys/fs/cgroup/memory.max") as handle:
+            text = handle.read().strip()
+    except OSError:
+        return None
+    return int(text) // (1024 * 1024) if text.isdigit() else None
+
+
+def resolve_data_limit_mb(configured: int | None, address_space_mb: int | None) -> int | None:
+    """The worker private-memory cap: as configured (0 = none), or derived from the container.
+
+    Derived: the container limit less the memory kept for the rest of the service, never below
+    ``_MIN_DATA_MB`` and never above the address-space limit. With no container limit, no cap.
+    """
+    if configured == 0:
+        return None
+    if configured is not None:
+        return configured
+    limit = cgroup_memory_limit_mb()
+    if limit is None:
+        return None
+    derived = max(_MIN_DATA_MB, limit - _RESERVE_MB)
+    return min(derived, address_space_mb) if address_space_mb else derived
 
 
 def memory_limit_supported() -> bool:

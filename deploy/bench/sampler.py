@@ -49,9 +49,10 @@ def parent_of(pid: str) -> str:
         return ""
 
 
-def memory_kb(pid: str) -> tuple[int, int]:
-    """(resident, virtual) size of a process in kB; the virtual size is what RLIMIT_AS limits."""
-    rss = vsize = 0
+def memory_kb(pid: str) -> tuple[int, int, int]:
+    """(resident, virtual, data) size of a process in kB. The virtual size is what RLIMIT_AS
+    limits and the data size (heap and private mappings) is what RLIMIT_DATA limits."""
+    rss = vsize = data = 0
     try:
         with open(f"/proc/{pid}/status") as handle:
             for line in handle:
@@ -59,9 +60,11 @@ def memory_kb(pid: str) -> tuple[int, int]:
                     rss = int(line.split()[1])
                 elif line.startswith("VmSize:"):
                     vsize = int(line.split()[1])
+                elif line.startswith("VmData:"):
+                    data = int(line.split()[1])
     except OSError:
         pass
-    return rss, vsize
+    return rss, vsize, data
 
 
 def read_int(path: str) -> int:
@@ -83,7 +86,7 @@ def main() -> None:
             phase = "none"
         entry = data.setdefault(phase, {"cgroup_peak_kb": 0, "procs": {}})
         entry["cgroup_peak_kb"] = max(entry["cgroup_peak_kb"], read_int(CGROUP) // 1024)
-        totals: dict[str, list[tuple[int, int]]] = {}
+        totals: dict[str, list[tuple[int, int, int]]] = {}
         fork_pids = {p for p in os.listdir("/proc") if p.isdigit() and label(p) == "forkserver?"}
         for pid in os.listdir("/proc"):
             if not pid.isdigit():
@@ -97,10 +100,12 @@ def main() -> None:
             totals.setdefault(name, []).append(memory_kb(pid))
         for name, values in totals.items():
             proc = entry["procs"].setdefault(
-                name, {"rss_peak_kb": 0, "sum_peak_kb": 0, "count_peak": 0, "vsize_peak_kb": 0}
+                name,
+                {"rss_peak_kb": 0, "sum_peak_kb": 0, "count_peak": 0, "vsize_peak_kb": 0, "data_peak_kb": 0},
             )
             proc["rss_peak_kb"] = max(proc["rss_peak_kb"], max(v[0] for v in values))
             proc["vsize_peak_kb"] = max(proc["vsize_peak_kb"], max(v[1] for v in values))
+            proc["data_peak_kb"] = max(proc["data_peak_kb"], max(v[2] for v in values))
             proc["sum_peak_kb"] = max(proc["sum_peak_kb"], sum(v[0] for v in values))
             proc["count_peak"] = max(proc["count_peak"], len(values))
         now = time.monotonic()

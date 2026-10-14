@@ -45,11 +45,36 @@ Cold start (container start to health 200): 19 to 39 s at 0.1 CPU across runs (a
 
 * Workers are still one new process per job, killed afterwards, with the same timeout, memory limit and JSON-only results. The container now starts them from a fork server (`BLUEPRINTIQ_WORKER_START_METHOD=forkserver`, falling back to `spawn` where unavailable) instead of `spawn`. The helper only imports libraries; it never receives a drawing. The worker tests run under both methods in Linux CI. The setting's default outside the container stays `spawn`.
 * Not changed: the 10 MiB limit, validation, Host/Origin checks, rate limiting, admission control, the 30 s job limit, or the 1 GiB worker address-space limit.
-* The worker limit was **not** lowered. The heaviest accepted drawing needs 271 MiB of address space, so 1 GiB is generous, but a hostile PDF that drives a worker towards that limit could exhaust the 512 MiB container before the limit applies. That case was **not tested**; the kernel would be expected to stop the largest process (the worker), but this is not shown.
+* The 1 GiB address-space limit was **not** lowered. Launch-4A added a container-aware private-memory cap and an out-of-memory priority instead (below).
+
+## Memory exhaustion and failure recovery (Launch-4A)
+
+Checked on the CI runner with `deploy/bench/chaos.py` against the production image at `--memory 512m --memory-swap 512m --cpus 0.1` (the `resilience` workflow). Bounded and synthetic; no crafted hostile PDF was used (see "Not tested").
+
+**Confirmed risk.** A job that grows to 900 MiB, run with only the address-space limit the service had (1 GiB, above the 512 MiB container), made the kernel kill **two** processes while the service was handling other requests: the job, and one more, and one ordinary request in that period failed. The container itself kept running. The address-space limit does not protect a 512 MiB container, because it counts mapped libraries and is far above the memory that is actually available.
+
+**Protections added (worker only; no validation or limit was weakened).**
+* The worker caps its own private memory (`RLIMIT_DATA`, heap and private mappings, which is what fills a container). Unset, the cap is derived from the container limit: limit minus 300 MiB kept for the rest of the service, at least 192 MiB, at most the address-space limit; so 212 MiB in a 512 MiB container and the old 1 GiB when there is room. `BLUEPRINTIQ_JOB_DATA_LIMIT_MB` overrides it (0 turns it off).
+* The worker marks itself the first process the kernel should stop (`oom_score_adj` 1000, which needs no privilege), so an out-of-memory event in the container takes the disposable worker, not the API server, the web server or the supervisor. `BLUEPRINTIQ_WORKER_PREFER_OOM_VICTIM=0` turns it off.
+
+**Legitimate work still passes.** With the 212 MiB cap active, all six inputs (both samples, busy, heavy, 10 MiB and at-limit) returned 200 at 0.1 CPU, and the full benchmark was repeated: container peak 342 MiB, no OOM kills. The heaviest accepted drawing's worker used 153 MiB of private memory (typical 77 to 87 MiB), so the cap has about 40% margin over the heaviest measured case. If a legitimate drawing is ever refused for memory, raise the cap rather than remove it.
+
+**Protected run:** the same 900 MiB job ended as a controlled `resource_limit` result, no kernel kills, 27 of 27 concurrent ordinary requests answered 200, and the next inspection passed.
+
+**Fork-server recovery (real container, 0.1 CPU).**
+
+| Fault | Result |
+|---|---|
+| Fork server killed while idle | next upload 200 in 6.8 s (it restarted), the one after 0.5 s |
+| Fork server hung (SIGSTOP) | after the 45 s start timeout the service ended it, fell back to `spawn` and answered 200 in 51.6 s; later requests 200 in 6.4 s; no hung process left |
+| Client disconnects mid-inspection, 8 times | no worker left running, next upload 200 |
+| `docker stop` during an inspection | stopped in 11.2 s with exit code 0 |
+
+Unit tests (Linux CI) also cover a killed and a hung real fork server, ten consecutive worker timeouts and a cancellation leaving no child processes, a worker's private-memory cap, the out-of-memory priority, and the API process being killed while a worker runs (the fork server and worker both exit). Start-up failure and hang are also tested with a fake fork-server context that does not depend on the platform, which replaces the skipped environment-injection test for the fork server.
 
 ## Not tested
 
-Real Render behaviour (CPU burst policy, cold-start timing, port detection, restarts); real industrial drawings (only synthetic inputs); a hostile PDF aimed at memory; long soaks beyond 24 requests; more than three concurrent clients; Windows (no memory limit there).
+Real Render behaviour (CPU burst policy, cold-start timing, port detection, restarts); real industrial drawings (only synthetic inputs); a crafted hostile PDF aimed at memory (only a generic memory-hungry job was used, in the service's own cgroup, so what a particular malformed PDF does inside MuPDF is not measured); long soaks beyond 24 requests; more than three concurrent clients; Windows (no memory limit there).
 
 ## Render Free
 

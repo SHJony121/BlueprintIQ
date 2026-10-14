@@ -63,3 +63,16 @@ def bad_report_inspection(
     data: bytes, ruleset: object, filename: str | None, limits: object
 ) -> str:
     return '{"schema_version": "1.0", "document": "DRAWING-SECRET"}'
+
+
+def touch(megabytes: int) -> int:
+    """Allocate and write to every page, so the memory is really resident."""
+    block = bytearray(megabytes * 1024 * 1024)
+    for offset in range(0, len(block), 4096):
+        block[offset] = 1
+    return len(block)
+
+
+def read_oom_score_adj() -> str:
+    with open("/proc/self/oom_score_adj", encoding="utf-8") as handle:
+        return handle.read().strip()

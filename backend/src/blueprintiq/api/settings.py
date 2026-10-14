@@ -26,6 +26,11 @@ class Settings(BaseSettings):
     # (Linux) forks it from a helper that already imported the libraries, which cuts the
     # start-up CPU. Falls back to "spawn" where unavailable.
     worker_start_method: Literal["spawn", "forkserver"] = "spawn"
+    # Cap on a worker private (heap) memory, Linux only: unset derives it from the container
+    # memory limit, 0 turns it off, a number is megabytes. See api.worker.
+    job_data_limit_mb: int | None = Field(default=None, ge=0)
+    # Ask the kernel to stop a worker before anything else if the container runs out of memory.
+    worker_prefer_oom_victim: bool = True
     max_concurrent_jobs: int = Field(default=2, ge=1)  # simultaneous worker processes
     queue_timeout_s: float = Field(default=30.0, gt=0)  # wait for a free worker, then 503
     # Requests admitted at once (uploading, waiting or running). Bounds memory held
