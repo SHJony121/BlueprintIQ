@@ -14,8 +14,16 @@ test.beforeEach(({}, info) => {
 const field = (page: Page, label: RegExp) => page.getByLabel(label);
 const fails = (page: Page) => page.getByTestId("summary-fail");
 
+/** The requirements fold away once results are shown; open them to edit. */
+async function showRequirements(page: Page) {
+  const details = page.locator("details", { hasText: "Inspection requirements" }).first();
+  if (!(await details.evaluate((element) => (element as HTMLDetailsElement).open))) {
+    await details.locator("summary").click();
+  }
+}
+
 async function open(page: Page) {
-  await page.goto(BASE());
+  await page.goto(`${BASE()}/inspect`);
   await page.setInputFiles("input[type=file]", file("valid_basic"));
   await expect(page.getByRole("status")).toHaveText(/^Inspection complete/);
 }
@@ -25,6 +33,7 @@ test("changing a threshold and running again changes the outcome and the applied
   await expect(page.getByTestId("applied-requirements")).toContainText("Demonstration values");
   const before = await fails(page).innerText();
 
+  await showRequirements(page);
   await field(page, /minimum thickness/i).fill("5");
   await field(page, /maximum diameter/i).fill("10");
   // Old results are hidden at once, not shown beside the new values.
@@ -43,11 +52,13 @@ test("changing a threshold and running again changes the outcome and the applied
 
 test("an exact material code that does not match fails, and reset restores the demonstration values", async ({ page }) => {
   await open(page);
+  await showRequirements(page);
   await field(page, /required material code/i).fill("SUS304");
   await page.getByRole("button", { name: "Run inspection" }).click();
   await expect(page.getByTestId("applied-requirements")).toContainText(/SUS304/);
   await expect(page.getByText(/The material is SS400; the requirement is SUS304/)).toBeVisible();
 
+  await showRequirements(page);
   await page.getByRole("button", { name: "Reset to demonstration values" }).click();
   await expect(page.getByTestId("requirements-label")).toHaveText("Demonstration values. Not engineering standards.");
   await expect(page.getByTestId("stale-results")).toBeVisible();
@@ -59,7 +70,7 @@ test("invalid values keep the run disabled and nothing is sent", async ({ page }
     requests += 1;
     await route.continue();
   });
-  await page.goto(BASE());
+  await page.goto(`${BASE()}/inspect`);
   await field(page, /minimum thickness/i).fill("-1");
   await page.setInputFiles("input[type=file]", file("valid_basic"));
   await expect(page.getByTestId("empty-results")).toContainText("chosen but not inspected");
@@ -68,7 +79,7 @@ test("invalid values keep the run disabled and nothing is sent", async ({ page }
 });
 
 test("CAD annotations are listed apart from the findings and never become pass or fail", async ({ page }) => {
-  await page.goto(BASE());
+  await page.goto(`${BASE()}/inspect`);
   await page.setInputFiles("input[type=file]", path.resolve(process.cwd(), "tests/fixtures/cad_dimensions.pdf"));
   await expect(page.getByRole("status")).toHaveText(/^Inspection complete/);
   const section = page.getByTestId("cad-annotations");
@@ -79,7 +90,7 @@ test("CAD annotations are listed apart from the findings and never become pass o
 });
 
 test("a verified feature association is drawn on the page, and an unresolved one says so", async ({ page }) => {
-  await page.goto(BASE());
+  await page.goto(`${BASE()}/inspect`);
   await page.setInputFiles("input[type=file]", path.resolve(process.cwd(), "tests/fixtures/feature_dimensions.pdf"));
   await expect(page.getByRole("status")).toHaveText(/^Inspection complete/);
   const diameter = page.getByTestId("cad-annotations").locator("li", { hasText: "Ø12" });

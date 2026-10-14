@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 // Always rendered by the root layout. The AGPL-3.0 entitles everyone who uses a deployed copy
 // over a network to its source code, so a deployment sets NEXT_PUBLIC_SOURCE_URL to the public
 // repository of the version it runs; the link is shown whenever it is set.
@@ -16,6 +18,8 @@ export function sourceUrl(
   }
 }
 
+const FOOTER_LINK = "inline-flex min-h-8 items-center underline underline-offset-2 hover:text-foreground";
+
 export function SiteFooter({ source = sourceUrl() }: { source?: URL | null }) {
   const notice =
     source === null
@@ -24,6 +28,25 @@ export function SiteFooter({ source = sourceUrl() }: { source?: URL | null }) {
   return (
     <footer className="mt-auto border-t border-line bg-surface">
       <div className="mx-auto w-full max-w-[1400px] px-4 py-4 text-sm text-muted sm:px-6">
+        <nav aria-label="Footer" className="mb-2">
+          <ul className="flex flex-wrap gap-x-5">
+            <li>
+              <Link className={FOOTER_LINK} href="/about">
+                How it works and limits
+              </Link>
+            </li>
+            <li>
+              <Link className={FOOTER_LINK} href="/privacy">
+                Privacy
+              </Link>
+            </li>
+            <li>
+              <Link className={FOOTER_LINK} href="/inspect">
+                Inspect a drawing
+              </Link>
+            </li>
+          </ul>
+        </nav>
         <p>
           BlueprintIQ is free software under the{" "}
           <a

@@ -1,10 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { RunInspection } from "@/api/client";
 import { describeFailure, describeFileProblem } from "@/inspection/failure-copy";
 import { DEMO_FORM, parseRequirements, type RequirementsForm } from "@/inspection/requirements";
 import type { InspectionState } from "@/inspection/state";
+import { loadSample, sampleById, type Sample } from "@/inspection/samples";
 import { useInspection } from "@/inspection/use-inspection";
 import { ErrorPanel } from "./error-panel";
 import type { InspectionReport } from "@/api/types";
@@ -12,6 +13,7 @@ import type { FindingLocation } from "./findings-list";
 import { ReportView } from "./report-view";
 import { RequirementsPanel } from "./requirements-panel";
 import { EmptyResults, ResultsSkeleton, StaleResults } from "./results-placeholders";
+import { SamplePicker } from "./sample-picker";
 import { UploadPanel } from "./upload-panel";
 import { UNPLACED_TEXT, buildViewerEvidence, type ViewerEvidence } from "@/viewer/evidence";
 import type { InspectionPhase } from "@/viewer/drawing-viewer";
@@ -21,15 +23,44 @@ import { ViewerSlot } from "./viewer-slot";
 interface InspectionDashboardProps {
   /** Replaceable so tests can drive the screen without a network. */
   run?: RunInspection;
+  /** Replaceable so tests can supply a sample without fetching it. */
+  fetchSample?: (sample: Sample) => Promise<File>;
   /** Replaceable so tests can drive the viewer without PDF.js or a canvas. */
   pdfSource?: PdfSource;
 }
 
-export function InspectionDashboard({ run, pdfSource }: InspectionDashboardProps) {
+export function InspectionDashboard({ run, pdfSource, fetchSample = loadSample }: InspectionDashboardProps) {
   const { state, select, retry, rerun, cancel } = useInspection(run);
   const [form, setForm] = useState<RequirementsForm>(DEMO_FORM);
   const requirements = useMemo(() => parseRequirements(form), [form]);
   const valid = requirements.ok ? requirements : null;
+
+  // A sample is fetched from this site and then chosen like any file the visitor picked.
+  const [loadingSample, setLoadingSample] = useState<Sample["id"] | null>(null);
+  const [sampleFailed, setSampleFailed] = useState(false);
+  const chooseSample = useCallback(
+    async (sample: Sample) => {
+      setSampleFailed(false);
+      setLoadingSample(sample.id);
+      try {
+        const file = await fetchSample(sample);
+        select([file], valid);
+      } catch {
+        setSampleFailed(true);
+      } finally {
+        setLoadingSample(null);
+      }
+    },
+    [fetchSample, select, valid],
+  );
+  // /inspect?sample=cad opens with that sample already running (the landing page links here).
+  const autoRan = useRef(false);
+  useEffect(() => {
+    if (autoRan.current) return;
+    autoRan.current = true;
+    const wanted = sampleById(new URLSearchParams(window.location.search).get("sample"));
+    if (wanted !== null) queueMicrotask(() => void chooseSample(wanted));
+  }, [chooseSample]);
 
   // Results belong to the requirements they were produced with. If the form no longer
   // describes them (changed or invalid), they are hidden, never shown beside new values.
@@ -105,17 +136,39 @@ export function InspectionDashboard({ run, pdfSource }: InspectionDashboardProps
             : "none";
   return (
     <div className="mx-auto w-full max-w-[1400px] flex-1 px-4 py-6 sm:px-6">
-      <h1 className="mb-4 text-xl font-semibold tracking-tight text-balance">Inspect a drawing</h1>
+      <h1 className="text-xl font-semibold tracking-tight text-balance">Inspect a drawing</h1>
+      <p className="mb-4 mt-1 max-w-3xl text-sm text-muted">
+        Upload a one-page engineering drawing PDF to read its labelled measurements, material and CAD
+        dimensions, and to check them against the limits below. The file is sent to the server for
+        inspection (see Privacy in the menu above).
+      </p>
       <UploadPanel state={state} onFiles={(files) => select(files, valid)} onCancel={cancel} />
+      {state.status === "idle" && (
+        <SamplePicker onChoose={(sample) => void chooseSample(sample)} loading={loadingSample} failed={sampleFailed} />
+      )}
       <RequirementsPanel
         form={form}
         result={requirements}
         onChange={setForm}
         runLabel={state.status === "running" ? null : runLabel}
         onRun={() => valid !== null && rerun(valid)}
+        collapsed={state.status === "succeeded" && !stale}
       />
       <Announcer state={state} stale={stale} />
       <Problem state={state} onRetry={retry} />
+      {viewerFile !== null && (
+        <p
+          data-testid="desktop-note"
+          className="mt-4 rounded-md border border-line border-l-4 border-l-accent bg-surface p-3 text-sm lg:hidden"
+        >
+          The drawing viewer, which highlights where each result sits on the page, needs a wider
+          screen. Use a desktop or a tablet in landscape for that; the results below are complete
+          without it.{" "}
+          <a className="font-medium text-accent underline underline-offset-4" href="#results-heading">
+            Jump to the results
+          </a>
+        </p>
+      )}
       <div className="mt-6 grid gap-6 lg:grid-cols-2">
         <ViewerSlot
           file={viewerFile}

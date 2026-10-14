@@ -23,6 +23,7 @@ docker run --rm --init --read-only --tmpfs /tmp --memory 1536m -p 8080:8080 \
   blueprintiq
 ```
 
+* `--build-arg SITE_URL=https://<public origin>` is optional: it gives the social-preview image an absolute address. Without it no preview image is linked (nothing points at localhost).
 * The build **fails** unless `SOURCE_URL` is an `https` address (AGPL section 13; the footer links it). `deploy/verify-source-url.mjs <url> --online` additionally checks that anonymous visitors can read it; a private repository fails that check.
 * Python dependencies are installed from `backend/uv.lock` with `pip --require-hashes`; Node dependencies with `npm ci`. Base images are pinned by tag only; pin them by digest when the release image is built.
 * The container runs as UID 10001, needs only a writable `/tmp`, and contains no PDFs, secrets or env files. Do not bake secrets into the image; there are none to supply.

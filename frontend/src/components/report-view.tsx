@@ -5,6 +5,7 @@ import { IncompleteExtraction } from "./incomplete-extraction";
 import { FindingsList, type FindingLocation } from "./findings-list";
 import { CadAnnotationList } from "./cad-annotation-list";
 import { MeasurementList, UnrecognizedList } from "./measurement-list";
+import { ResultsGuide } from "./results-guide";
 import { SummaryCards } from "./summary-cards";
 
 /** A successful inspection. Only ever given a report that passed the response checks. */
@@ -28,6 +29,7 @@ export function ReportView({
       <IncompleteExtraction skipped={report.skipped_angled_lines} />
       <AppliedRequirements report={report} />
       <SummaryCards summary={report.summary} />
+      <ResultsGuide />
       <FindingsList
         findings={report.findings}
         measurements={report.measurements}
