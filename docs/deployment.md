@@ -76,6 +76,10 @@ The backend runs one inspection at a time. Plan for, per instance:
 
 Overload is graceful: excess requests receive `429` (per client) or `503 SERVER_BUSY` (global), never a hang.
 
+## Free hosting constraint
+
+The project budget is **$0**: no paid host and no billing account. Render's free web service offers only 512 MB of RAM and 0.1 CPU, which is below the tested configuration (about 1.5 GiB, one 1 GiB-capped worker). **Compatibility with Render Free (or any 512 MB host) is not claimed** and will not be until Linux resource measurements of real inspections show the worker fits. Do not lower the worker memory limit or other security limits to make a smaller host work without those measurements.
+
 ## Validation
 
 `.github/workflows/container-ci.yml` builds the image on every relevant change and checks: non-root user, no PDFs or secrets in the image, startup refusal without allowed hosts, read-only start with a memory cap and platform `PORT`, backend unreachable from outside, the Docker health check, `deploy/smoke.sh` (production `Host` header, spoofed origin, bad uploads, rate limit, security headers, hidden diagnostics), and a clean `docker stop`. Docker was not available on the machine where this was written, so these steps ran only in CI.
@@ -87,3 +91,8 @@ Overload is graceful: excess requests receive `429` (per client) or `503 SERVER_
 3. **Worker memory on Linux** must be measured on the real host.
 4. **First container build in CI** (the CI job above) must pass; image digests should be pinned for the release.
 5. No authentication, abuse reporting or privacy notice exists; decide whether the anonymous-upload site needs them before launch.
+6. **Source URL verification stays a launch requirement:** run `node deploy/verify-source-url.mjs <url> --online` against the exact `SOURCE_URL` before any public launch; it must pass.
+
+## Dependency maintenance
+
+`npm audit` (all dependencies) reports 5 high-severity findings, all through `braces` 3.0.3 (GHSA-vfj7-8cjw-p6xm, stack exhaustion on deeply nested patterns) via `eslint-config-next` → `@next/eslint-plugin-next` → `fast-glob` → `micromatch`. It is a development-only chain (lint tooling); `npm audit --omit=dev` reports 0 vulnerabilities and the image prunes dev dependencies. Recorded 2026-10-14 for dependency maintenance: update `eslint-config-next` when a release resolves it, rather than using `npm audit fix --force`.
