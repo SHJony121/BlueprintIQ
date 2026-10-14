@@ -1,9 +1,9 @@
-import { InspectionDashboard } from "@/components/inspection-dashboard";
+import { Landing } from "@/components/landing/landing";
 
 export default function Home() {
   return (
     <main id="main" className="flex flex-1 flex-col">
-      <InspectionDashboard />
+      <Landing />
     </main>
   );
 }

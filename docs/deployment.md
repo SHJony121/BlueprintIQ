@@ -23,9 +23,10 @@ docker run --rm --init --read-only --tmpfs /tmp --memory 1536m -p 8080:8080 \
   blueprintiq
 ```
 
+* `--build-arg SITE_URL=https://<public origin>` is optional: it gives the social-preview image an absolute address. Without it no preview image is linked (nothing points at localhost).
 * The build **fails** unless `SOURCE_URL` is an `https` address (AGPL section 13; the footer links it). `deploy/verify-source-url.mjs <url> --online` additionally checks that anonymous visitors can read it; a private repository fails that check.
 * Python dependencies are installed from `backend/uv.lock` with `pip --require-hashes`; Node dependencies with `npm ci`. Base images are pinned by tag only; pin them by digest when the release image is built.
-* The container runs as UID 10001, needs only a writable `/tmp`, and contains no PDFs, secrets or env files. Do not bake secrets into the image; there are none to supply.
+* The container runs as UID 10001, needs only a writable `/tmp`, and contains no PDFs other than the two original sample drawings, and no secrets or env files. Do not bake secrets into the image; there are none to supply.
 
 ## Settings
 
@@ -82,7 +83,7 @@ The project budget is **$0**: no paid host and no billing account. Render's free
 
 ## Validation
 
-`.github/workflows/container-ci.yml` builds the image on every relevant change and checks: non-root user, no PDFs or secrets in the image, startup refusal without allowed hosts, read-only start with a memory cap and platform `PORT`, backend unreachable from outside, the Docker health check, `deploy/smoke.sh` (production `Host` header, spoofed origin, bad uploads, rate limit, security headers, hidden diagnostics), and a clean `docker stop`. Docker was not available on the machine where this was written, so these steps ran only in CI.
+`.github/workflows/container-ci.yml` builds the image on every relevant change and checks: non-root user, no PDFs (other than the two original samples) or secrets in the image, startup refusal without allowed hosts, read-only start with a memory cap and platform `PORT`, backend unreachable from outside, the Docker health check, `deploy/smoke.sh` (production `Host` header, spoofed origin, bad uploads, rate limit, security headers, hidden diagnostics), and a clean `docker stop`. Docker was not available on the machine where this was written, so these steps ran only in CI.
 
 ## Release blockers
 

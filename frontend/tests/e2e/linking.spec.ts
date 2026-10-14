@@ -14,7 +14,7 @@ test.beforeEach(({}, info) => {
 
 async function open(page: Page, name: string, height = 900) {
   await page.setViewportSize({ width: 1440, height });
-  await page.goto(BASE());
+  await page.goto(`${BASE()}/inspect`);
   await page.setInputFiles("input[type=file]", drawing(name));
   await expect(page.getByRole("status")).toHaveText(/^Inspection complete/);
   await waitForDrawn(page);

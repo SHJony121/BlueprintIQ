@@ -49,7 +49,7 @@ async function captureReports(page: Page): Promise<Map<string, Report>> {
 /** Upload through the real file input and wait for the report and the drawn page. */
 async function inspect(page: Page, file: string): Promise<Report> {
   const reports = await captureReports(page);
-  await page.goto(BASE());
+  await page.goto(`${BASE()}/inspect`);
   await page.setInputFiles("input[type=file]", file);
   await expect(page.getByRole("status")).toHaveText(/^Inspection complete/);
   await waitForDrawn(page);
@@ -120,7 +120,7 @@ test("a second file replaces the first everywhere: its boxes go at once, and onl
   const second = committedTruth("violations");
   const reports = await captureReports(page);
   // The first file is inspected completely, so its boxes are on screen.
-  await page.goto(BASE());
+  await page.goto(`${BASE()}/inspect`);
   await page.setInputFiles("input[type=file]", first.file);
   await expect(page.getByRole("status")).toHaveText(/^Inspection complete: 0 fail/);
   await waitForDrawn(page);
@@ -146,7 +146,7 @@ test("a second file replaces the first everywhere: its boxes go at once, and onl
 });
 
 test("a multi-page PDF is not shown, and no evidence is drawn", async ({ page }) => {
-  await page.goto(BASE());
+  await page.goto(`${BASE()}/inspect`);
   await page.setInputFiles("input[type=file]", path.resolve(process.cwd(), "../backend/tests/fixtures/drawings/multi_page.pdf"));
   // Next.js adds its own role="alert" route announcer, so match the error panel by its text.
   await expect(page.getByRole("alert").filter({ hasText: "Only single-page drawings are supported" })).toBeVisible();
@@ -157,7 +157,7 @@ test("a multi-page PDF is not shown, and no evidence is drawn", async ({ page })
 test("a file that is not a PDF cannot be displayed", async ({ page }, info) => {
   const fake = path.join(process.cwd(), "test-results", `not-a-pdf-${info.project.name}.pdf`);
   writeFileSync(fake, "hello, this is not a PDF");
-  await page.goto(BASE());
+  await page.goto(`${BASE()}/inspect`);
   await page.setInputFiles("input[type=file]", fake);
   // Next.js adds its own role="alert" route announcer, so match the error panel by its text.
   await expect(page.getByRole("alert").filter({ hasText: "This is not a PDF file" })).toBeVisible();
@@ -166,7 +166,7 @@ test("a file that is not a PDF cannot be displayed", async ({ page }, info) => {
 });
 
 test("a drawing the backend refuses is shown without evidence", async ({ page }) => {
-  await page.goto(BASE());
+  await page.goto(`${BASE()}/inspect`);
   await page.setInputFiles("input[type=file]", path.resolve(process.cwd(), "../backend/tests/fixtures/drawings/no_text.pdf"));
   // Next.js adds its own role="alert" route announcer, so match the error panel by its text.
   await expect(page.getByRole("alert").filter({ hasText: "No readable text found" })).toBeVisible();

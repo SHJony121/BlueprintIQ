@@ -17,6 +17,7 @@
 **/*.key
 **/*.pdf
 !backend/tests/fixtures/**/*.pdf
+!frontend/public/samples/*.pdf
 backend/tests
 docs
 Dockerfile

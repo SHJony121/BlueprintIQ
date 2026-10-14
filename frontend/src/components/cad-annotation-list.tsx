@@ -50,6 +50,7 @@ export function CadAnnotationList({
         without doubt (a stacked tolerance, shown with each line as printed);
         otherwise it stays a separate, uncertain entry.
       </p>
+      {associations.length > 0 && <AssociationSummary associations={associations} />}
       {unitNote !== null && (
         <p className="mt-1 text-sm text-muted">
           Unit note on the drawing:{" "}
@@ -194,5 +195,22 @@ function AssociationNote({
         </button>
       ) : null}
     </div>
+  );
+}
+
+/** How many annotations are tied to the drawing, and how many are not: verified and uncertain stay apart. */
+function AssociationSummary({ associations }: { associations: readonly FeatureAssociation[] }) {
+  const count = (status: FeatureAssociation["status"]) => associations.filter((a) => a.status === status).length;
+  const verified = count("verified");
+  const unresolved = count("unresolved");
+  const unsupported = count("unsupported");
+  return (
+    <p data-testid="association-summary" className="mt-2 text-sm">
+      <span className="font-medium">Tied to the drawing:</span>{" "}
+      <span className="text-accent">{verified} verified</span>
+      {unresolved > 0 && <span className="text-review">, {unresolved} unresolved</span>}
+      {unsupported > 0 && <span className="text-review">, {unsupported} not supported</span>}
+      <span className="text-muted">. Unresolved items are not guesses: the reason is given under each.</span>
+    </p>
   );
 }

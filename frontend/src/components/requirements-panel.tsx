@@ -16,6 +16,8 @@ interface RequirementsPanelProps {
   /** What the primary button does, or null when there is no file to inspect or it is running. */
   runLabel: string | null;
   onRun: () => void;
+  /** Folded away while a current result is shown, so the results are not pushed below the fold. */
+  collapsed?: boolean;
 }
 
 const LIMITS: { field: FieldName; label: string; hint: string }[] = [
@@ -30,15 +32,20 @@ const LIMITS: { field: FieldName; label: string; hint: string }[] = [
  * for an inspection when the button is pressed (or a file is chosen); changing them never
  * changes results already shown, which are hidden as out of date instead.
  */
-export function RequirementsPanel({ form, result, onChange, runLabel, onRun }: RequirementsPanelProps) {
+export function RequirementsPanel({ form, result, onChange, runLabel, onRun, collapsed = false }: RequirementsPanelProps) {
   const id = useId();
   const isDemo = result.ok && result.isDemo;
   const set = <K extends FieldName>(field: K, value: RequirementsForm[K]) => onChange({ ...form, [field]: value });
   const errors = result.ok ? {} : result.errors;
 
   return (
-    <details open className="mt-4 rounded-md border border-line bg-surface">
-      <summary className="cursor-pointer px-4 py-3 text-base font-semibold">Inspection requirements</summary>
+    <details open={!collapsed} className="mt-4 rounded-md border border-line bg-surface">
+      <summary className="cursor-pointer px-4 py-3 text-base font-semibold">
+        Inspection requirements{" "}
+        <span className="font-normal text-muted">
+          ({isDemo ? "demonstration values" : "custom values"}; open to change them)
+        </span>
+      </summary>
       <div className="border-t border-line px-4 py-4">
         <p data-testid="requirements-label" className="text-sm font-medium">
           {isDemo ? DEMO_NOTE : "Custom requirements. Edited from the demonstration values."}

@@ -12,13 +12,15 @@ ARG PYTHON_IMAGE=python:3.12-slim-bookworm
 # ---- frontend build -------------------------------------------------------------------
 FROM ${NODE_IMAGE} AS frontend
 ARG SOURCE_URL
+# Optional public origin of the site (for the social-preview image address); unset leaves it out.
+ARG SITE_URL=
 WORKDIR /src
 COPY deploy/verify-source-url.mjs deploy/verify-source-url.mjs
 RUN test -n "$SOURCE_URL" && node deploy/verify-source-url.mjs "$SOURCE_URL"
 COPY frontend/package.json frontend/package-lock.json frontend/
 RUN cd frontend && npm ci --no-audit --no-fund
 COPY frontend frontend
-ENV NEXT_TELEMETRY_DISABLED=1 NEXT_PUBLIC_SOURCE_URL=${SOURCE_URL}
+ENV NEXT_TELEMETRY_DISABLED=1 NEXT_PUBLIC_SOURCE_URL=${SOURCE_URL} NEXT_PUBLIC_SITE_URL=${SITE_URL}
 RUN cd frontend && npm run build && npm prune --omit=dev
 
 # ---- backend dependencies (hash-pinned from uv.lock) ------------------------------------

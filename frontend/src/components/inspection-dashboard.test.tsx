@@ -650,7 +650,9 @@ describe("keyboard use", () => {
     await user.upload(fileInput(), pdf());
     calls[0]!.resolve(ok(allOutcomesReport()));
     await screen.findByRole("heading", { name: FINDINGS_HEADING });
-    const links = screen.getAllByRole("link");
+    const links = screen
+      .getAllByRole("link")
+      .filter((link) => link.getAttribute("href")?.startsWith("#measurement-"));
     expect(links.length).toBe(3);
     const reached = new Set<Element>();
     for (let i = 0; i < links.length + 40; i += 1) {

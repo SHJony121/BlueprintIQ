@@ -1,10 +1,13 @@
 // The production build (`next start`) configured the way the container configures it: a public
 // host allow-list, one trusted proxy hop and a rate limit. Raw sockets send the Host header a
 // real reverse proxy would; fetch cannot.
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
   afterBody,
   drawing,
+  FRONTEND_DIR,
   json,
   rawSocket,
   startNext,
@@ -101,6 +104,53 @@ describe("the production server", () => {
     expect(csp).toContain("frame-ancestors 'none'");
     expect(csp).toContain("worker-src 'self' blob:");
     expect(csp).not.toContain("'unsafe-eval'");
+  });
+
+  it.each(["/", "/inspect", "/about", "/privacy", "/does-not-exist"])(
+    "gives the page %s the security headers too",
+    async (route) => {
+      const response = await fetch(`${base}${route}`);
+      expect(response.status).toBe(route === "/does-not-exist" ? 404 : 200);
+      expect(response.headers.get("content-security-policy")).toContain("default-src 'self'");
+      expect(response.headers.get("x-frame-options")).toBe("DENY");
+      expect(response.headers.get("x-content-type-options")).toBe("nosniff");
+    },
+  );
+
+  it("serves the sample drawings as static PDFs with the same headers", async () => {
+    for (const file of ["blueprintiq-sample-basic.pdf", "blueprintiq-sample-cad.pdf"]) {
+      const response = await fetch(`${base}/samples/${file}`);
+      expect(response.status).toBe(200);
+      expect(response.headers.get("content-type")).toContain("application/pdf");
+      expect(response.headers.get("x-content-type-options")).toBe("nosniff");
+      expect(new TextDecoder().decode((await response.arrayBuffer()).slice(0, 5))).toBe("%PDF-");
+    }
+  });
+
+  it("still refuses an upload of a sample from an unlisted host", async () => {
+    const before = upstream.requests.length;
+    const sample = readFileSync(path.resolve(FRONTEND_DIR, "public/samples/blueprintiq-sample-basic.pdf"));
+    const client = rawSocket(next.port);
+    await client.write(
+      [
+        "POST /api/inspections HTTP/1.1",
+        "Host: attacker.example",
+        "Content-Type: application/pdf",
+        `Content-Length: ${sample.length}`,
+        "Connection: close",
+        "",
+        "",
+      ].join("\r\n"),
+    );
+    await client.write(sample);
+    expect((await client.response()).status).toBe(403);
+    expect(upstream.requests.length).toBe(before);
+  });
+
+  it("answers the social-preview image with a PNG", async () => {
+    const response = await fetch(`${base}/og`);
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toBe("image/png");
   });
 
   it.each(["/pdfjs-check", "/viewer-check"])("does not serve the diagnostic page %s", async (route) => {
