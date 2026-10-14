@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Status** | Recommendation — pending owner confirmation |
+| **Status** | **Decided: keep PyMuPDF and release the project under AGPL-3.0-or-later** (owner decision; see [NOTICE.md](../../NOTICE.md)) |
 | **Date** | 2026-10-12 |
 | **Decision needed by** | Before the repository is made public (not before M1–M5) |
 

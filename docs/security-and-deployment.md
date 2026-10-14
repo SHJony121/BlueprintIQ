@@ -33,8 +33,11 @@ The Next.js app forwards uploads to the backend through one server-side route, `
 
 ## Licensing
 
-* **PyMuPDF is licensed AGPL-3.0 (or a commercial licence).** The decision for a public release is **unresolved**: publish under AGPL-3.0, obtain a commercial licence, or replace the engine with a permissively licensed one such as pypdfium2 (it would need its own line-grouping and coordinate conversion; PyMuPDF use is confined to `ingestion/pdf_loader.py` and `extraction/text_layer.py`). See [design/adr-001-pdf-engine.md](design/adr-001-pdf-engine.md).
-* The repository currently has **no licence**: all rights reserved, and it is **private**.
+* **Decision: AGPL-3.0-or-later** (Option A of the public-release audit). PyMuPDF/MuPDF is AGPL-3.0 (or Artifex commercial); BlueprintIQ uses it under the AGPL-3.0, so the project is released under the same licence: [LICENSE](../LICENSE), [NOTICE.md](../NOTICE.md).
+* **Source offer.** Users of a deployed copy must be able to get its source (AGPL section 13). The page footer links the public repository when `NEXT_PUBLIC_SOURCE_URL` is set at build time; **every public deployment must set it** to the repository of the version it runs, and a modified deployment must publish its modified source.
+* The repository is still **private**. Making it public is a separate step: check history for secrets and personal data first (history holds no env files and only generated PDFs; one commit author address is a personal email).
+* The other direct dependencies are MIT, BSD, Apache-2.0 or OFL and are compatible; see NOTICE.md. A commercial PyMuPDF licence or a different engine would be needed only to relicense the project; neither is planned.
+* **Not legal advice.** Whether the separate Next.js frontend is a separate work from the AGPL backend does not matter here, because both are released under the AGPL.
 
 ## Safe local use
 
