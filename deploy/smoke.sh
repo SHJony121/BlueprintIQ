@@ -12,6 +12,9 @@ status() { curl -s -o /dev/null -w '%{http_code}' "$@"; }
 
 check "health"            200 "$(status "$base/api/health")"
 check "home page"         200 "$(status -H "Host: $host" "$base/")"
+check "sample basic served" 200 "$(status "$base/samples/blueprintiq-sample-basic.pdf")"
+check "sample cad served"   200 "$(status "$base/samples/blueprintiq-sample-cad.pdf")"
+check "about page"          200 "$(status -H "Host: $host" "$base/about")"
 check "diagnostics hidden" 404 "$(status "$base/pdfjs-check")"
 check "viewer check hidden" 404 "$(status "$base/viewer-check")"
 

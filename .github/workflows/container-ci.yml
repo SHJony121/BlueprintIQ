@@ -31,11 +31,13 @@ jobs:
       - name: Image runs as a non-root user
         run: test "$(docker run --rm --entrypoint id "$IMAGE" -u)" != 0
 
-      - name: Image holds no PDFs, env files or keys
+      - name: Image holds no PDFs (other than the two original samples), env files or keys
         run: |
           docker run --rm --entrypoint sh "$IMAGE" -c \
-            'find /app -path /app/frontend/node_modules -prune -o -type f \( -iname "*.pdf" -o -name ".env*" -o -name "*.pem" -o -name "*.key" \) -print | head' | tee found.txt
+            'find /app -path /app/frontend/node_modules -prune -o -path /app/frontend/public/samples -prune -o -type f \( -iname "*.pdf" -o -name ".env*" -o -name "*.pem" -o -name "*.key" \) -print | head' | tee found.txt
           test ! -s found.txt
+          docker run --rm --entrypoint sh "$IMAGE" -c 'ls /app/frontend/public/samples' | sort | tee samples.txt
+          test "$(wc -l < samples.txt)" = 2
 
       - name: Refuses to start with a public bind and no allowed hosts
         run: |
