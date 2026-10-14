@@ -220,8 +220,21 @@ export function startLaunchScript(script: "start" | "dev"): Promise<ChildServer>
 }
 
 /** The production build served by `next start` on 127.0.0.1 (requires `npm run build`). */
-export function startNext(backendUrl: string | undefined): Promise<ChildServer> {
-  const env: NodeJS.ProcessEnv = { ...process.env, NEXT_TELEMETRY_DISABLED: "1" };
+export function startNext(
+  backendUrl: string | undefined,
+  extraEnv: Record<string, string> = {},
+): Promise<ChildServer> {
+  const env: NodeJS.ProcessEnv = {
+    ...process.env,
+    NEXT_TELEMETRY_DISABLED: "1",
+    BLUEPRINTIQ_ENABLE_DIAGNOSTICS: "1", // the diagnostic pages are for these tests only
+    ...extraEnv,
+  };
+  for (const name of Object.keys(env)) {
+    // A stray production setting in the developer's shell must not change a test.
+    const mine = name in extraEnv || name === "BLUEPRINTIQ_ENABLE_DIAGNOSTICS";
+    if (name.startsWith("BLUEPRINTIQ_") && !mine) delete env[name];
+  }
   delete env.BLUEPRINTIQ_BACKEND_URL;
   if (backendUrl !== undefined) env.BLUEPRINTIQ_BACKEND_URL = backendUrl;
   const nextBin = path.join(FRONTEND_DIR, "node_modules/next/dist/bin/next");

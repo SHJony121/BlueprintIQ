@@ -5,6 +5,7 @@ import { pipeline } from "node:stream/promises";
 import { errorResponse, newRequestId, responseHeaders, type ProxyErrorCode } from "./api-error";
 import { MAX_UPLOAD_BYTES } from "@/lib/limits";
 import type { BackendConfig } from "./backend-config";
+import { clientKey, policyFromEnv, sameOrigin, type ProxyPolicy } from "./production-config";
 
 // Server-side proxy for POST /api/inspections -> backend POST /api/v1/inspections.
 //
@@ -68,18 +69,27 @@ const MAX_FILENAME_HEADER = 255 * 12;
 // here and forwarded untouched: the backend parses it with a strict, fixed schema.
 const MAX_REQUIREMENTS_HEADER = 2048;
 
-const LOCAL_HOST = /^(localhost|127\.\d{1,3}\.\d{1,3}\.\d{1,3}|\[::1\])(:\d{1,5})?$/i;
 const REQUEST_ID = /^[0-9a-f]{32}$/;
 
 export async function proxyInspection(
   request: Request,
   config: BackendConfig,
   limits: ProxyLimits = DEFAULT_LIMITS,
+  policy: ProxyPolicy = policyFromEnv(),
 ): Promise<Response> {
   if (!config.ok) return errorResponse("PROXY_MISCONFIGURED");
-  const refused = checkRequest(request.headers);
+  const refused = checkRequest(request.headers, policy);
   if (refused !== undefined) return errorResponse(refused);
   if (request.signal.aborted) return errorResponse("CLIENT_DISCONNECTED");
+
+  // After the cheap checks and before a single body byte is read: one client cannot hold
+  // the upload slots or the workers.
+  const ticket = policy.limiter?.acquire(clientKey(request.headers, policy.clients));
+  if (ticket !== undefined && !ticket.ok) {
+    return errorResponse(ticket.reason === "rate" ? "RATE_LIMITED" : "TOO_MANY_UPLOADS", undefined, {
+      "Retry-After": String(ticket.retryAfterSeconds),
+    });
+  }
 
   const requestId = newRequestId();
   const abort = new AbortController();
@@ -115,6 +125,7 @@ export async function proxyInspection(
     logFailure(reason, requestId, error);
     return errorResponse(FAILURE_CODES[reason], requestId);
   } finally {
+    if (ticket !== undefined && ticket.ok) ticket.release();
     clearTimeout(totalTimer);
     clearTimeout(uploadTimer);
     request.signal.removeEventListener("abort", onClientGone);
@@ -125,8 +136,8 @@ export async function proxyInspection(
 }
 
 /** Refuse requests the proxy must not forward, before any body byte is read. */
-function checkRequest(headers: Headers): ProxyErrorCode | undefined {
-  if (!isSameOriginLocal(headers)) return "FORBIDDEN";
+function checkRequest(headers: Headers, policy: ProxyPolicy): ProxyErrorCode | undefined {
+  if (!sameOrigin(headers, policy.hosts)) return "FORBIDDEN";
   if (mediaType(headers.get("content-type")) !== "application/pdf") {
     return "UNSUPPORTED_CONTENT_TYPE";
   }
@@ -150,20 +161,6 @@ function checkRequest(headers: Headers): ProxyErrorCode | undefined {
     return "INVALID_REQUIREMENTS";
   }
   return undefined;
-}
-
-/**
- * The app is served on loopback only. Checking Host defends against DNS rebinding (a
- * foreign name resolving to 127.0.0.1); checking Origin and Sec-Fetch-Site refuses
- * other sites' pages. Requests without browser headers (curl, tests) are allowed.
- */
-function isSameOriginLocal(headers: Headers): boolean {
-  const host = headers.get("host");
-  if (host === null || !LOCAL_HOST.test(host)) return false;
-  const origin = headers.get("origin");
-  if (origin !== null && origin.toLowerCase() !== `http://${host.toLowerCase()}`) return false;
-  const site = headers.get("sec-fetch-site");
-  return site === null || site === "same-origin";
 }
 
 function mediaType(value: string | null | undefined): string {

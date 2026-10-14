@@ -86,9 +86,13 @@ def create_app(settings: Settings | None = None, *, job: Job = inspection_job) -
         extra={"event": "startup", "detail": f"{ruleset.ruleset.id} {ruleset.ruleset.version}"},
     )  # fmt: skip
 
+    documented = settings.environment != "production"
     app = FastAPI(
         title="BlueprintIQ",
         version=__version__,
+        docs_url="/docs" if documented else None,
+        redoc_url="/redoc" if documented else None,
+        openapi_url="/openapi.json" if documented else None,
         description="Assistive engineering-drawing inspection prototype. Not certified "
         "compliance software; findings must be reviewed by a qualified person.",
     )
@@ -210,20 +214,45 @@ def create_app(settings: Settings | None = None, *, job: Job = inspection_job) -
         request: Request, data: bytes, filename: str | None, rules: Ruleset
     ) -> Response:
 
+        gone = threading.Event()  # set when the client disconnects: stop work nobody awaits
+
         def run_when_a_worker_is_free() -> JobResult | None:
-            if not workers.acquire(timeout=settings.queue_timeout_s):
-                return None
+            waited = 0.0
+            while not workers.acquire(timeout=0.2):
+                waited += 0.2
+                if gone.is_set() or waited >= settings.queue_timeout_s:
+                    return None
             try:
                 return run_job(
                     job,
                     (data, rules, filename, limits),
                     timeout_s=settings.job_timeout_s,
                     memory_limit_mb=settings.job_memory_limit_mb,
+                    cancel=gone,
                 )
             finally:
                 workers.release()
 
-        result = await anyio.to_thread.run_sync(run_when_a_worker_is_free)
+        async def watch_for_disconnect() -> None:
+            # A blocking receive: the body is already read, so the only message left is the
+            # disconnect. (Polling with is_disconnected() never sees it through the
+            # BaseHTTPMiddleware that adds the request id.) Cancelled when the job ends.
+            while True:
+                message = await request.receive()
+                if message["type"] == "http.disconnect":
+                    gone.set()
+                    return
+
+        async with anyio.create_task_group() as tasks:
+            tasks.start_soon(watch_for_disconnect)
+            result = await anyio.to_thread.run_sync(run_when_a_worker_is_free)
+            tasks.cancel_scope.cancel()
+        if gone.is_set():
+            logger.info(
+                "client disconnected",
+                extra={"event": "client_disconnect", "request_id": request.state.request_id},
+            )
+            raise ApiError(400, "CLIENT_DISCONNECTED", "The upload was interrupted.")
         if result is None:
             raise ApiError(503, "SERVER_BUSY", "All workers are busy; try again later.")
         return _respond(request, result, data, logger)

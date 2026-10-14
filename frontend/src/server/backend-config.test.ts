@@ -59,3 +59,32 @@ describe("parseBackendUrl", () => {
     expect(JSON.stringify(config)).not.toContain("secret-host");
   });
 });
+
+describe("parseBackendUrl with private networks allowed", () => {
+  it.each([
+    ["http://10.0.0.5:8000", "10.0.0.5", 8000],
+    ["http://172.16.4.1:9000", "172.16.4.1", 9000],
+    ["http://172.31.255.255:80", "172.31.255.255", 80],
+    ["http://192.168.1.20:8000", "192.168.1.20", 8000],
+    ["http://127.0.0.1:8000", "127.0.0.1", 8000],
+  ])("accepts %s", (raw, hostname, port) => {
+    expect(parseBackendUrl(raw, true)).toEqual({ ok: true, hostname, port });
+  });
+
+  it.each([
+    "http://8.8.8.8:8000",
+    "http://172.32.0.1:8000",
+    "http://172.15.0.1:8000",
+    "http://169.254.169.254:80",
+    "http://backend.internal:8000",
+    "http://localhost:8000",
+    "https://10.0.0.5:8000",
+    "http://10.0.0.5:8000/path",
+  ])("still refuses %s", (raw) => {
+    expect(parseBackendUrl(raw, true).ok).toBe(false);
+  });
+
+  it("refuses private addresses unless allowed", () => {
+    expect(parseBackendUrl("http://10.0.0.5:8000").ok).toBe(false);
+  });
+});

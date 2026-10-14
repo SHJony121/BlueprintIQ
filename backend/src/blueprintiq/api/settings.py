@@ -1,6 +1,7 @@
 """API settings: explicit, typed, overridable with BLUEPRINTIQ_* environment variables."""
 
 from pathlib import Path
+from typing import Literal
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -14,6 +15,9 @@ DEFAULT_RULESET = Path(__file__).resolve().parents[1] / "rules" / "demo_rules.to
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="BLUEPRINTIQ_", frozen=True, extra="forbid")
 
+    # "production" switches off the interactive API documentation (/docs, /redoc and
+    # /openapi.json); nothing else about the API changes.
+    environment: Literal["development", "production"] = "development"
     ruleset_path: Path = DEFAULT_RULESET
     max_upload_bytes: int = Field(default=10 * MIB, ge=1)
     job_timeout_s: float = Field(default=30.0, gt=0)  # wall clock per inspection

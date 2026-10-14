@@ -35,8 +35,9 @@ _CONTEXT = multiprocessing.get_context("spawn")
 _KILL_GRACE_S = 5.0
 _MAX_RESULT_BYTES = 64 * 1024 * 1024
 _WATCHDOG_EXIT = 70  # exit code when the child's own watchdog fires
+_POLL_S = 0.2  # how often a running job looks at its cancel flag
 
-Kind = Literal["ok", "rejected", "timeout", "crashed", "resource_limit", "error"]
+Kind = Literal["ok", "rejected", "timeout", "crashed", "resource_limit", "error", "cancelled"]
 
 
 @dataclass(frozen=True, slots=True)
@@ -55,11 +56,13 @@ def run_job(
     *,
     timeout_s: float,
     memory_limit_mb: int | None,
+    cancel: threading.Event | None = None,
 ) -> JobResult:
     """Run ``job(*args)`` in a new process; never raises for problems inside the job.
 
     ``job`` must be a module-level function (it is imported again in the child) and
-    must return a JSON-serializable value.
+    must return a JSON-serializable value. If ``cancel`` is set while the job runs (the
+    client went away), the process is killed at once and the result is ``cancelled``.
     """
     receive, send = _CONTEXT.Pipe(duplex=False)
     process = _CONTEXT.Process(
@@ -71,7 +74,16 @@ def run_job(
     try:
         # Wake on a result, or on the process ending (even if it died before it
         # could close its end of the pipe), or on the deadline.
-        ready = wait([receive, process.sentinel], timeout=timeout_s)
+        deadline = time.monotonic() + timeout_s
+        cancelled = False
+        while True:
+            remaining = deadline - time.monotonic()
+            ready = wait([receive, process.sentinel], timeout=max(0.0, min(_POLL_S, remaining)))
+            if ready or remaining <= _POLL_S:
+                break
+            if cancel is not None and cancel.is_set():
+                cancelled = True
+                break
         if receive in ready or receive.poll(0):
             try:
                 raw = receive.recv_bytes(maxlength=_MAX_RESULT_BYTES)
@@ -79,12 +91,14 @@ def run_job(
                 raw = None
         if ready:
             process.join(_KILL_GRACE_S)
-        timed_out = not ready
+        timed_out = not ready and not cancelled
     finally:
         receive.close()
         if process.is_alive():
             process.kill()
             process.join(_KILL_GRACE_S)
+    if cancelled:
+        return JobResult("cancelled", exitcode=process.exitcode)
     if timed_out:
         return JobResult("timeout", exitcode=process.exitcode)
     if raw is None:

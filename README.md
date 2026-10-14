@@ -4,7 +4,7 @@
 
 > **Assistive prototype, not certified compliance software.** BlueprintIQ does not guarantee engineering safety, regulatory compliance, or manufacturing correctness. The rule thresholds shipped here are **demonstration values**, not industry or company standards. Findings must be reviewed by a qualified person.
 
-> **Status:** a working **local full-stack MVP** (FastAPI backend plus Next.js frontend with a PDF viewer). It is verified against **synthetic fixtures only**; real industrial CAD PDFs, embedded fonts and Japanese drawings have not been tested. It is for **trusted local use**; public deployment is blocked (see [Security](docs/security-and-deployment.md)). The repository is private and unlicensed.
+> **Status:** a working **local full-stack MVP** (FastAPI backend plus Next.js frontend with a PDF viewer). It is verified against **synthetic fixtures only**; real industrial CAD PDFs, embedded fonts and Japanese drawings have not been tested. It is for **trusted local use**; public deployment is blocked (see [Security](docs/security-and-deployment.md)). The repository is private; the code is licensed under AGPL-3.0-or-later.
 
 ## What it does
 
@@ -195,7 +195,7 @@ Full list: [docs/testing-and-evaluation.md](docs/testing-and-evaluation.md#limit
 
 ## Security and release restrictions
 
-**Trusted local use only. Public deployment is blocked.** No authentication, rate limiting or TLS (the Next.js proxy adds none); no worker memory limit on Windows (Linux only); inspections are not cancelled when a client disconnects; real CAD PDFs not benchmarked; and the remaining public-release work (host and rate-limit configuration, security headers, packaging) is not done. The licence decision is made: **AGPL-3.0-or-later** (see [Licence](#licence)). See [docs/security-and-deployment.md](docs/security-and-deployment.md).
+**Public deployment is blocked.** Launch-1 added production hardening and a container (allow-listed hosts, trusted-proxy client identity, per-client rate and concurrency limits, security headers, no diagnostic or docs endpoints, worker cancellation on disconnect); see [docs/deployment.md](docs/deployment.md). It is not deployed. Remaining blockers include a public source repository for the AGPL source offer, a chosen host with TLS, Linux worker-memory measurements, and real CAD PDFs not being benchmarked. Without the production settings the app is for trusted local use only. The licence is **AGPL-3.0-or-later** (see [Licence](#licence)). See [docs/security-and-deployment.md](docs/security-and-deployment.md).
 
 ## Licence
 
@@ -219,5 +219,6 @@ frontend/src/              app (routes, proxy route), server (proxy), api, inspe
 frontend/tests/            proxy, ui, e2e (Playwright; geometry_fixtures.py generates extra test PDFs)
 docs/                      architecture, walkthrough, testing & evaluation, security, frontend-f0..f4
 docs/screenshots/          real screenshots of the running app (F2, F3, F4)
-.github/workflows/         backend-ci.yml; frontend-ci.yml (checks, proxy-backend, browser)
+.github/workflows/         backend-ci.yml; frontend-ci.yml (checks, proxy-backend, browser); container-ci.yml
+Dockerfile, deploy/        single-container image: launch config, entrypoint, health check, smoke test
 ```

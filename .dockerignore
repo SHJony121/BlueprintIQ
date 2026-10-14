@@ -1,0 +1,22 @@
+# Keep the build context to what the image needs; nothing local or secret goes in.
+**/.git
+**/.github
+**/node_modules
+**/.next
+**/.venv
+**/__pycache__
+**/.pytest_cache
+**/.mypy_cache
+**/.ruff_cache
+**/test-results
+**/playwright-report
+**/*.tsbuildinfo
+**/.env
+**/.env.*
+**/*.pem
+**/*.key
+**/*.pdf
+!backend/tests/fixtures/**/*.pdf
+backend/tests
+docs
+Dockerfile
