@@ -253,7 +253,11 @@ def summarize(report: dict) -> str:
             p = procs.get(kind)
             if p is None:
                 return "-"
-            extra = f" (virt {p.get('vsize_peak_kb', 0) / 1024:.0f})" if kind == "worker" else ""
+            extra = (
+                f" (virt {p.get('vsize_peak_kb', 0) / 1024:.0f}, data {p.get('data_peak_kb', 0) / 1024:.0f})"
+                if kind == "worker"
+                else ""
+            )
             return f"{p['rss_peak_kb'] / 1024:.0f} / {p['sum_peak_kb'] / 1024:.0f} / {p['count_peak']}{extra}"
 
         lines.append(f"| {name} | {data['cgroup_peak_kb'] / 1024:.0f} | {cell('backend')} | {cell('frontend')} | {cell('forkserver')} | {cell('worker')} |")

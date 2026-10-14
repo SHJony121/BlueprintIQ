@@ -6,8 +6,10 @@
 # SOURCE_URL is the public source of exactly this version (AGPL-3.0-or-later section 13); the
 # build refuses to continue without a valid https address.
 
-ARG NODE_IMAGE=node:24-bookworm-slim
-ARG PYTHON_IMAGE=python:3.12-slim-bookworm
+# Base images are pinned by digest so a rebuild gets the same bytes. The tag is kept for people;
+# the digest is what Docker uses. Refresh both with deploy/refresh-digests.sh (see docs/deployment.md).
+ARG NODE_IMAGE=node:24-bookworm-slim@sha256:d6aa754f16b3197301076f047b5def2f02ea1dbbc2ca920407d46d7ec7f87b20
+ARG PYTHON_IMAGE=python:3.12-slim-bookworm@sha256:34386ef0cb081344d7ec1c103ba398e6e9f64e9ab3a1509accc92a4e24a07258
 
 # ---- frontend build -------------------------------------------------------------------
 FROM ${NODE_IMAGE} AS frontend

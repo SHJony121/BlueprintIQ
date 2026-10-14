@@ -1,0 +1,43 @@
+name: resilience
+
+# Failure-recovery checks for the production container at Render Free-sized limits (512 MiB,
+# 0.1 CPU): memory exhaustion, a failing fork server, client disconnects and shutdown. Bounded
+# and synthetic; deploys nothing and needs no secrets.
+on:
+  workflow_dispatch:
+  push:
+    branches: ["feat/launch4a-**"]
+    paths: ["backend/src/**", "deploy/**", "Dockerfile", ".github/workflows/resilience.yml"]
+  pull_request:
+    paths: ["backend/src/**", "deploy/**", "Dockerfile", ".github/workflows/resilience.yml"]
+
+permissions:
+  contents: read
+
+jobs:
+  chaos:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build the production image
+        run: docker build --build-arg SOURCE_URL=https://example.org/owner/blueprintiq -t blueprintiq:chaos .
+
+      - name: Make the synthetic inputs
+        run: python3 deploy/bench/make_inputs.py "$RUNNER_TEMP/inputs"
+
+      - name: Failure-recovery checks at 512 MiB and 0.1 CPU
+        run: python3 deploy/bench/chaos.py blueprintiq:chaos "$RUNNER_TEMP/inputs" "$RUNNER_TEMP/chaos.json" 0.1 | tee "$RUNNER_TEMP/chaos.txt"
+
+      - name: Results
+        if: always()
+        run: |
+          cat "$RUNNER_TEMP/chaos.txt" >> "$GITHUB_STEP_SUMMARY" || true
+          cp "$RUNNER_TEMP/chaos.json" chaos.json || true
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: resilience-results
+          path: chaos.json
