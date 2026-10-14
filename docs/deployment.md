@@ -96,6 +96,10 @@ The project budget is **$0**: no paid host and no billing account. Render's free
 4. **First container build in CI** (the CI job above) must pass; image digests should be pinned for the release.
 5. No authentication, abuse reporting or privacy notice exists; decide whether the anonymous-upload site needs them before launch.
 6. **Source URL verification stays a launch requirement:** run `node deploy/verify-source-url.mjs <url> --online` against the exact `SOURCE_URL` before any public launch; it must pass.
+7. **Render itself has not been tested.** The 512 MiB / 0.1 CPU numbers come from a simulated limit on a CI runner. Compatibility with Render Free is not claimed.
+8. **Resource exhaustion by hostile or unusually memory-hungry PDFs is unvalidated.** The 1 GiB worker address-space limit is above the 512 MiB container limit, so such a file could exhaust the container before the limit applies. This must be tested (and the limit reconsidered) before public anonymous uploads.
+9. **Fork-server failure and cleanup paths need more testing.** The worker tests run under both start methods, but the test that injects a startup failure through the environment is skipped for the fork server. Still to be exercised: the fork server dying or hanging while the API runs, a worker outliving a killed API, leaked processes after many kills, and a start-up failure inside a fork-server child.
+10. **Budget:** the project budget is strictly $0 and no billing details will be entered; any host that asks for a card is out.
 
 ## Dependency maintenance
 
