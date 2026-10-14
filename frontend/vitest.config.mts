@@ -24,6 +24,8 @@ export default defineConfig({
             "tests/proxy/handler.test.ts",
             "tests/proxy/guards.test.ts",
             "tests/proxy/launch-scripts.test.ts",
+            "tests/proxy/production-policy.test.ts",
+            "tests/proxy/launch-config.test.ts",
           ],
         },
       },
@@ -42,7 +44,11 @@ export default defineConfig({
         extends: true,
         test: {
           name: "server",
-          include: ["tests/proxy/next-server.test.ts", "tests/proxy/launch-binding.test.ts"],
+          include: [
+            "tests/proxy/next-server.test.ts",
+            "tests/proxy/launch-binding.test.ts",
+            "tests/proxy/production-server.test.ts",
+          ],
           testTimeout: 30_000,
           hookTimeout: 60_000,
         },

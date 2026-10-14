@@ -1,0 +1,85 @@
+name: container-ci
+
+on:
+  push:
+    branches: [main, "feat/**"]
+    paths: ["Dockerfile", ".dockerignore", "deploy/**", "backend/src/**", "backend/pyproject.toml", "backend/uv.lock", "frontend/src/**", "frontend/package.json", "frontend/package-lock.json", "frontend/next.config.ts", ".github/workflows/container-ci.yml"]
+  pull_request:
+    paths: ["Dockerfile", ".dockerignore", "deploy/**", "backend/src/**", "backend/pyproject.toml", "backend/uv.lock", "frontend/src/**", "frontend/package.json", "frontend/package-lock.json", "frontend/next.config.ts", ".github/workflows/container-ci.yml"]
+
+permissions:
+  contents: read
+
+env:
+  IMAGE: blueprintiq:ci
+  PUBLIC_HOST: demo.example.test
+
+jobs:
+  image:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build refuses a missing or non-https source URL
+        run: |
+          ! docker build -t blueprintiq:nosrc . 2>/dev/null
+          ! docker build --build-arg SOURCE_URL=http://example.org/x -t blueprintiq:nosrc . 2>/dev/null
+
+      - name: Build
+        run: docker build --build-arg SOURCE_URL=https://example.org/owner/blueprintiq -t "$IMAGE" .
+
+      - name: Image runs as a non-root user
+        run: test "$(docker run --rm --entrypoint id "$IMAGE" -u)" != 0
+
+      - name: Image holds no PDFs, env files or keys
+        run: |
+          docker run --rm --entrypoint sh "$IMAGE" -c \
+            'find /app -path /app/frontend/node_modules -prune -o -type f \( -iname "*.pdf" -o -name ".env*" -o -name "*.pem" -o -name "*.key" \) -print | head' | tee found.txt
+          test ! -s found.txt
+
+      - name: Refuses to start with a public bind and no allowed hosts
+        run: |
+          set +e
+          docker run --rm -e BLUEPRINTIQ_BIND=0.0.0.0 "$IMAGE"
+          test "$?" = 2
+
+      - name: Start (read-only, 1.5 GiB, platform PORT)
+        run: |
+          docker run -d --name app --read-only --tmpfs /tmp:rw,size=256m --memory 1536m --init \
+            --cap-drop ALL --security-opt no-new-privileges \
+            -e PORT=9000 -e BLUEPRINTIQ_ALLOWED_HOSTS="$PUBLIC_HOST" -e BLUEPRINTIQ_TRUSTED_PROXY_HOPS=1 \
+            -e BLUEPRINTIQ_RATE_LIMIT_PER_MINUTE=10 -e BLUEPRINTIQ_RATE_LIMIT_BURST=5 \
+            -p 127.0.0.1:9000:9000 "$IMAGE"
+          for i in $(seq 1 60); do
+            curl -sf http://127.0.0.1:9000/api/health >/dev/null && exit 0
+            sleep 1
+          done
+          docker logs app
+          exit 1
+
+      - name: Backend is not published
+        run: |
+          ! curl -s --max-time 3 http://127.0.0.1:8001/healthz
+          test "$(docker inspect -f '{{json .NetworkSettings.Ports}}' app)" = '{"9000/tcp":[{"HostIp":"127.0.0.1","HostPort":"9000"}]}'
+
+      - name: Container health check turns healthy
+        run: |
+          for i in $(seq 1 30); do
+            test "$(docker inspect -f '{{.State.Health.Status}}' app)" = healthy && exit 0
+            sleep 2
+          done
+          docker inspect -f '{{json .State.Health}}' app
+          exit 1
+
+      - name: Smoke test with production-style headers
+        run: |
+          chmod +x deploy/smoke.sh
+          deploy/smoke.sh http://127.0.0.1:9000 "$PUBLIC_HOST" backend/tests/fixtures/drawings/valid_basic.pdf
+
+      - name: Graceful stop leaves no processes behind
+        run: |
+          start=$(date +%s)
+          docker stop --time 20 app
+          test "$(docker inspect -f '{{.State.ExitCode}}' app)" = 0
+          test $(( $(date +%s) - start )) -lt 15
+          docker logs app 2>&1 | tail -20

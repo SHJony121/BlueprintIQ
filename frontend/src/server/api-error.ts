@@ -11,7 +11,9 @@ export type ProxyErrorCode = keyof typeof ERRORS;
 export const ERRORS = {
   NOT_FOUND: [404, "Request not handled."],
   METHOD_NOT_ALLOWED: [405, "Request not handled."],
-  FORBIDDEN: [403, "Requests must come from this application on the local machine."],
+  FORBIDDEN: [403, "Requests must come from this application."],
+  RATE_LIMITED: [429, "Too many inspections from this connection. Wait a moment and try again."],
+  TOO_MANY_UPLOADS: [429, "An inspection from this connection is already running. Wait for it to finish."],
   UNSUPPORTED_CONTENT_TYPE: [
     415,
     "Send the PDF as the request body with Content-Type: application/pdf.",

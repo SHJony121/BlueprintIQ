@@ -144,9 +144,20 @@ const API_CODES: Record<string, Entry> = {
   // Added by the Next.js proxy, not the backend.
   FORBIDDEN: {
     title: "The request was refused",
-    explanation:
-      "The app only accepts uploads from pages opened on this computer, and this page was opened another way.",
-    hint: "Open the app at http://127.0.0.1:3000 or http://localhost:3000.",
+    explanation: "The app only accepts uploads from its own pages, and this page was opened another way.",
+    hint: "Open the app at its normal address, not through another site or a different host name.",
+  },
+  RATE_LIMITED: {
+    title: "Too many inspections in a short time",
+    explanation: "This connection has sent several drawings very recently.",
+    hint: "Wait a minute and try again.",
+    retryable: true,
+  },
+  TOO_MANY_UPLOADS: {
+    title: "An inspection is already running",
+    explanation: "This connection already has the maximum number of drawings being inspected.",
+    hint: "Wait for it to finish, then try again.",
+    retryable: true,
   },
   BACKEND_UNAVAILABLE: {
     title: "The inspection service is not reachable",
