@@ -107,8 +107,12 @@ def test_child_watchdog_ends_a_worker_whose_parent_has_gone(tmp_path: Path) -> N
 
 
 def test_startup_failure_in_the_child_is_a_crash_not_a_timeout(
-    monkeypatch: pytest.MonkeyPatch,
+    monkeypatch: pytest.MonkeyPatch, start_method: str
 ) -> None:
+    if start_method == "forkserver":
+        # The simulated failure is an environment variable the worker inherits when it is
+        # spawned; a fork server already running has the environment of its own start.
+        pytest.skip("the failure is injected through the environment of a spawned worker")
     monkeypatch.setenv("BLUEPRINTIQ_TEST_FAIL_WORKER_IMPORT", "1")
     started = time.perf_counter()
     result = run_job(child_import_fails.job, (), timeout_s=60, memory_limit_mb=None)

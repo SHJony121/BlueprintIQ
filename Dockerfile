@@ -62,7 +62,7 @@ ENV PATH=/opt/venv/bin:$PATH \
 # --read-only. Everything else is owned by root and not writable by the service user.
 USER 10001:10001
 EXPOSE 8080
-HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
+HEALTHCHECK --interval=30s --timeout=5s --start-period=120s --retries=3 \
   CMD ["node", "deploy/healthcheck.mjs"]
 STOPSIGNAL SIGTERM
 ENTRYPOINT ["node", "deploy/entrypoint.mjs"]

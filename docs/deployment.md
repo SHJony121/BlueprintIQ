@@ -44,6 +44,7 @@ The container refuses to start (exit code 2, reason printed) when a setting is i
 | `BLUEPRINTIQ_MAX_UPLOADS_PER_CLIENT` | `2` | Uploads in flight per client: `429 TOO_MANY_UPLOADS`. |
 | `BLUEPRINTIQ_MAX_CONCURRENT_JOBS` | `1` | Inspection workers running at once. |
 | `BLUEPRINTIQ_MAX_ADMITTED_REQUESTS` | `3` | Requests admitted at once (running + waiting); more get `503 SERVER_BUSY`. |
+| `BLUEPRINTIQ_WORKER_START_METHOD` | `forkserver` | `forkserver` or `spawn`: how each job's new process is started. |
 | `BLUEPRINTIQ_JOB_MEMORY_LIMIT_MB` | `1024` | Address-space limit per worker (`RLIMIT_AS`, Linux). |
 | `BLUEPRINTIQ_JOB_TIMEOUT_S` / `_UPLOAD_TIMEOUT_S` / `_QUEUE_TIMEOUT_S` | `30` / `30` / `15` | Worker run time, time allowed to receive the upload, time allowed to wait for a free worker. |
 | `BLUEPRINTIQ_BACKEND_ALLOW_PRIVATE` | unset | `1` lets `BLUEPRINTIQ_BACKEND_URL` be a private-network IP (RFC 1918). Not needed in this container. |
@@ -65,21 +66,23 @@ The limiter is **in memory, per container instance**. Running N instances gives 
 
 ## Resources
 
-The backend runs one inspection at a time. Plan for, per instance:
+Measured on Linux in the production container (see [free-hosting.md](free-hosting.md) for method, numbers and caveats):
 
-| Part | Budget |
+| Part | Measured peak (resident) |
 |---|---|
-| Inspection worker | up to `BLUEPRINTIQ_JOB_MEMORY_LIMIT_MB` (1 GiB address space) |
-| FastAPI process | ~0.1 GiB |
-| Next.js | ~0.25 GiB (`--max-old-space-size=192`) |
+| Inspection worker | 69 MiB typical, 133 MiB for the heaviest accepted drawing (271 MiB virtual) |
+| FastAPI process | 85 MiB, up to 188 MiB while three 10 MiB uploads are held |
+| Next.js (`--max-old-space-size=192`) | 130 to 175 MiB |
+| Fork server (workers are forked from it) | 70 MiB |
+| Whole container | 340 MiB peak at 512 MiB, no OOM kills; 360 MiB at 1.5 GiB |
 
-**Start at 1.5 GiB of memory and one worker.** A 512 MB host does **not** fit one 1 GiB worker; do not run it there, and do not raise `BLUEPRINTIQ_MAX_CONCURRENT_JOBS` without adding about 1 GiB per worker. Actual worker memory on Linux for realistic drawings has not been measured (the address-space limit is an upper bound, not typical use); measure it on the target host before choosing a plan.
+**512 MiB fits one worker; 1 GiB is comfortable.** Do not raise `BLUEPRINTIQ_MAX_CONCURRENT_JOBS` without adding about 150 MiB per worker. CPU matters more than memory on a small share: at 0.1 CPU a typical drawing takes 0.5 to 5 s and the heaviest accepted drawing 11 to 13 s against the 30 s job limit. `BLUEPRINTIQ_WORKER_START_METHOD` defaults to `forkserver` in the container (workers are still one new process per job); `spawn` costs about 1 CPU-second per job, which is 10 s at a 10% share. The 1 GiB worker address-space limit was not lowered, and a hostile PDF aimed at memory was not tested.
 
 Overload is graceful: excess requests receive `429` (per client) or `503 SERVER_BUSY` (global), never a hang.
 
 ## Free hosting constraint
 
-The project budget is **$0**: no paid host and no billing account. Render's free web service offers only 512 MB of RAM and 0.1 CPU, which is below the tested configuration (about 1.5 GiB, one 1 GiB-capped worker). **Compatibility with Render Free (or any 512 MB host) is not claimed** and will not be until Linux resource measurements of real inspections show the worker fits. Do not lower the worker memory limit or other security limits to make a smaller host work without those measurements.
+The project budget is **$0**: no paid host and no billing account. Render's free web service offers 512 MB of RAM and 0.1 CPU. Launch-3 measured the container at exactly those limits on Linux: it fits in memory and finishes tested work, slowly ([free-hosting.md](free-hosting.md)). **Compatibility with Render Free is still not claimed**: nothing has run on Render itself, and its sign-up and Docker-on-Free details are unconfirmed. Do not lower the worker memory limit or other security limits to make a smaller host work without further measurements.
 
 ## Validation
 
@@ -89,7 +92,7 @@ The project budget is **$0**: no paid host and no billing account. Render's free
 
 1. **Public source URL (AGPL section 13).** The repository is private. A public deployment needs a public, anonymously readable repository (or equivalent source archive) of the exact version it runs, passed as `SOURCE_URL`. Making the repository public is a separate decision (check history for secrets and personal data first). A private repository does not satisfy the licence.
 2. **Host and TLS.** No host is chosen. TLS and the public host name come from the platform; set `BLUEPRINTIQ_ALLOWED_HOSTS` and the proxy hop count to match it, and test the real `X-Forwarded-For` behaviour there.
-3. **Worker memory on Linux** must be measured on the real host.
+3. **Real-host check:** the Linux measurements were taken on a CI runner with Render-sized limits; confirm start-up, one real upload and the sign-up flow on the chosen host.
 4. **First container build in CI** (the CI job above) must pass; image digests should be pinned for the release.
 5. No authentication, abuse reporting or privacy notice exists; decide whether the anonymous-upload site needs them before launch.
 6. **Source URL verification stays a launch requirement:** run `node deploy/verify-source-url.mjs <url> --online` against the exact `SOURCE_URL` before any public launch; it must pass.
