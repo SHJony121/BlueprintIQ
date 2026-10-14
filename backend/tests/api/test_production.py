@@ -1,12 +1,14 @@
 """Production settings, and work that nobody is waiting for any more is stopped."""
 
 import json
+import sys
 import threading
 import time
 from typing import Any
 
 import anyio
 import pytest
+from pydantic import ValidationError
 
 from blueprintiq.api.app import create_app
 from blueprintiq.api.settings import Settings
@@ -120,3 +122,41 @@ def test_a_client_that_disconnects_while_its_inspection_runs_frees_the_worker() 
         b"".join(m.get("body", b"") for m in sent if m["type"] == "http.response.body")
     )
     assert payload["error"]["code"] == "CLIENT_DISCONNECTED"
+
+
+# ------------------------------------------------------------------ worker start method
+
+
+def test_worker_start_method_is_a_validated_setting() -> None:
+    assert Settings().worker_start_method == "spawn"
+    assert Settings(worker_start_method="forkserver").worker_start_method == "forkserver"
+    with pytest.raises(ValidationError):
+        Settings(worker_start_method="fork")  # type: ignore[arg-type]
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="no fork server on Windows")
+def test_an_inspection_runs_through_the_fork_server_in_its_own_process() -> None:
+    from blueprintiq.api.worker import use_start_method
+
+    try:
+        api = client(worker_start_method="forkserver")
+        response = api.post(
+            "/api/v1/inspections",
+            content=pdf_bytes("valid_basic"),
+            headers={"Content-Type": "application/pdf"},
+        )
+        assert response.status_code == 200
+        assert sum(response.json()["summary"].values()) > 0
+    finally:
+        use_start_method("spawn")
+
+
+def test_the_fork_server_falls_back_to_spawn_where_it_does_not_exist(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import multiprocessing
+
+    from blueprintiq.api.worker import use_start_method
+
+    monkeypatch.setattr(multiprocessing, "get_all_start_methods", lambda: ["spawn"])
+    assert use_start_method("forkserver") == "spawn"

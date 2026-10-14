@@ -42,14 +42,12 @@ MIB = 1024 * 1024
 PROFILES: dict[str, tuple[list[str], dict[str, str]]] = {
     "reference-1536m-2cpu": (["--memory", "1536m", "--memory-swap", "1536m", "--cpus", "2"], {}),
     "512m-1cpu": (["--memory", "512m", "--memory-swap", "512m", "--cpus", "1"], {}),
+    # The container's own defaults at the Render Free limits.
     "render-free-512m-0.1cpu": (["--memory", "512m", "--memory-swap", "512m", "--cpus", "0.1"], {}),
-    "render-free-forkserver": (
+    # The same limits with per-job process start by "spawn", for comparison.
+    "render-free-spawn": (
         ["--memory", "512m", "--memory-swap", "512m", "--cpus", "0.1"],
-        {"BLUEPRINTIQ_WORKER_START_METHOD": "forkserver"},
-    ),
-    "512m-1cpu-forkserver": (
-        ["--memory", "512m", "--memory-swap", "512m", "--cpus", "1"],
-        {"BLUEPRINTIQ_WORKER_START_METHOD": "forkserver"},
+        {"BLUEPRINTIQ_WORKER_START_METHOD": "spawn"},
     ),
 }
 
@@ -201,12 +199,16 @@ def measure(image: str, inputs: Path, bench: Path, name: str) -> dict:
     try:
         steps.append(phase("idle-start", lambda: time.sleep(15)))
         report["after_start_cgroup_mb"] = round(cgroup().get("memory.current", 0) / MIB, 1)
-        for stem in ("sample-basic", "sample-cad", "complex", "near-limit", "at-limit"):
+        for stem in ("sample-basic", "sample-cad", "complex", "heavy", "near-limit", "at-limit"):
             steps.append(phase(f"seq:{stem}", lambda s=stem: [post(files[s]) for _ in range(3)]))
-        for stem in ("sample-cad", "complex"):
+        for stem in ("sample-cad", "complex", "heavy"):
             steps.append(phase(f"concurrent3:{stem}", lambda s=stem: concurrent(files[s], 3)))
         steps.append(phase("concurrent3:near-limit", lambda: concurrent(files["near-limit"], 3)))
         steps.append(phase("over-limit", lambda: [post(files["over-limit"])]))
+        steps.append(phase("idle-before-soak", lambda: time.sleep(10)))
+        report["before_soak_cgroup_mb"] = round(cgroup().get("memory.current", 0) / MIB, 1)
+        steps.append(phase("soak:12x near-limit", lambda: [post(files["near-limit"]) for _ in range(12)]))
+        steps.append(phase("soak:12x complex", lambda: [post(files["complex"]) for _ in range(12)]))
         steps.append(phase("idle-after", lambda: time.sleep(30)))
         report["end_cgroup_mb"] = round(cgroup().get("memory.current", 0) / MIB, 1)
     except Exception as error:  # the container may have died: report what is known
@@ -231,7 +233,7 @@ def measure(image: str, inputs: Path, bench: Path, name: str) -> dict:
 def summarize(report: dict) -> str:
     lines = [f"### {report['profile']}", ""]
     lines.append(f"cold start {report['cold_start_s']} s; memory after start {report.get('after_start_cgroup_mb')} MiB; "
-                 f"after the workload {report.get('end_cgroup_mb')} MiB; cgroup peak {report['cgroup']['memory_peak_mb']} MiB; "
+                 f"before the 24-request soak {report.get('before_soak_cgroup_mb')} MiB; after everything {report.get('end_cgroup_mb')} MiB; cgroup peak {report['cgroup']['memory_peak_mb']} MiB; "
                  f"OOM kills {report['cgroup']['oom_kills']}; container {report['container']}; healthy at end {report['health_at_end']}")
     if "error" in report:
         lines.append(f"ERROR: {report['error']}")
@@ -242,14 +244,17 @@ def summarize(report: dict) -> str:
         if isinstance(result, list):
             cells = " ".join(f"{r['status'] or r['code']}:{r['seconds']}" for r in result)
         lines.append(f"| {step['phase']} | {step['wall_s']} | {step['cpu_s']} | {step['throttled_s']} | {cells} |")
-    lines += ["", "peak RSS per process kind (MiB; one process / all at once / most at once):", ""]
+    lines += ["", "peak RSS per process kind (MiB; one process / all at once / most at once) and, for workers, peak virtual size:", ""]
     lines += ["| phase | container peak | " + " | ".join(["backend", "frontend", "forkserver", "worker"]) + " |", "|---|---|---|---|---|---|"]
     for name, data in report["processes"].items():
         procs = data["procs"]
 
         def cell(kind: str) -> str:
             p = procs.get(kind)
-            return "-" if p is None else f"{p['rss_peak_kb'] / 1024:.0f} / {p['sum_peak_kb'] / 1024:.0f} / {p['count_peak']}"
+            if p is None:
+                return "-"
+            extra = f" (virt {p.get('vsize_peak_kb', 0) / 1024:.0f})" if kind == "worker" else ""
+            return f"{p['rss_peak_kb'] / 1024:.0f} / {p['sum_peak_kb'] / 1024:.0f} / {p['count_peak']}{extra}"
 
         lines.append(f"| {name} | {data['cgroup_peak_kb'] / 1024:.0f} | {cell('backend')} | {cell('frontend')} | {cell('forkserver')} | {cell('worker')} |")
     return "\n".join(lines)

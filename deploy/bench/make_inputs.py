@@ -61,6 +61,28 @@ def complex_drawing() -> bytes:
     return build_pdf(DocumentSpec(pages=(PageSpec(runs=tuple(runs), shapes=tuple(shapes)),)))
 
 
+def heavy_drawing() -> bytes:
+    """About the heaviest drawing the backend accepts: close to its text-line, character and
+    line-run limits (5,000 lines, 100,000 characters, 8,000 straight runs). A worst case for
+    CPU and memory that is still a valid, accepted input."""
+    shapes: list[Shape] = []
+    for i in range(7000):
+        y = 20 + (i % 780)
+        x = 20 + (i // 780) * 60
+        shapes.append(Shape("line", (x, y, x + 55, y + (i % 7) * 0.5)))
+    for i in range(60):
+        shapes.append(Shape("polycircle", (80 + (i % 10) * 50, 100 + (i // 10) * 80, 14, 48)))
+    runs = [
+        TextRun("THICKNESS: 4 mm", 20, 12),
+        TextRun("DIAMETER: 20 mm", 150, 12),
+        TextRun("LENGTH: 120 mm", 280, 12),
+        TextRun("MATERIAL: S235JR", 410, 12),
+    ]
+    for i in range(4700):
+        runs.append(TextRun(f"NOTE {i:05d} ABCDEFGHIJ", 20 + (i % 5) * 110, 24 + (i // 5) * 0.8, size=0.7))
+    return build_pdf(DocumentSpec(pages=(PageSpec(runs=tuple(runs), shapes=tuple(shapes)),)))
+
+
 def padded(base: bytes, total: int) -> bytes:
     """`base` with one extra unreferenced stream object so the file is `total` bytes long."""
     # Rebuild from the base document's own objects is not possible, so wrap it: a PDF whose
@@ -113,6 +135,7 @@ def main(out: Path) -> None:
     shutil.copy(samples / "blueprintiq-sample-basic.pdf", out / "sample-basic.pdf")
     shutil.copy(samples / "blueprintiq-sample-cad.pdf", out / "sample-cad.pdf")
     (out / "complex.pdf").write_bytes(complex_drawing())
+    (out / "heavy.pdf").write_bytes(heavy_drawing())
     near = padded(b"", LIMIT - 2048)
     (out / "near-limit.pdf").write_bytes(near)
     (out / "at-limit.pdf").write_bytes(padded(b"", LIMIT))

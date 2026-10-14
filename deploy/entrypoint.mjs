@@ -13,7 +13,9 @@ const frontendDir = process.env.BLUEPRINTIQ_FRONTEND_DIR ?? path.join(root, "fro
 const backendSrc = process.env.BLUEPRINTIQ_BACKEND_SRC ?? path.join(root, "backend", "src");
 const python = process.env.BLUEPRINTIQ_PYTHON ?? "python";
 const STOP_GRACE_MS = 10_000;
-const BACKEND_START_MS = 60_000;
+// Measured: about 40 s from container start to ready at 0.1 CPU (a Render Free-sized share),
+// of which the backend is most. Allow several times that on a slower or busier host.
+const BACKEND_START_MS = 180_000;
 
 const launch = readLaunchConfig(process.env);
 if (!launch.ok) {

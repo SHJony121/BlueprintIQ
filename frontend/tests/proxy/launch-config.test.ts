@@ -45,6 +45,13 @@ describe("the container launch configuration", () => {
     expect(Number(config.frontendEnv.BLUEPRINTIQ_RATE_LIMIT_PER_MINUTE)).toBeGreaterThan(0);
   });
 
+  it("starts workers from a fork server by default, and accepts only the two known methods", async () => {
+    const read = await load();
+    expect(read(PUBLIC).config!.backendEnv.BLUEPRINTIQ_WORKER_START_METHOD).toBe("forkserver");
+    expect(read({ ...PUBLIC, BLUEPRINTIQ_WORKER_START_METHOD: "spawn" }).config!.backendEnv.BLUEPRINTIQ_WORKER_START_METHOD).toBe("spawn");
+    expect(read({ ...PUBLIC, BLUEPRINTIQ_WORKER_START_METHOD: "fork" }).ok).toBe(false);
+  });
+
   it("follows the PORT of the platform", async () => {
     const read = await load();
     expect(read({ ...PUBLIC, PORT: "10000" }).config!.port).toBe(10000);
