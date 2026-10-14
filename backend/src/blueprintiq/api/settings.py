@@ -22,6 +22,10 @@ class Settings(BaseSettings):
     max_upload_bytes: int = Field(default=10 * MIB, ge=1)
     job_timeout_s: float = Field(default=30.0, gt=0)  # wall clock per inspection
     job_memory_limit_mb: int = Field(default=1024, ge=64)  # Linux only; see api.worker
+    # How a worker process is started. Every job is a new process either way; "forkserver"
+    # (Linux) forks it from a helper that already imported the libraries, which cuts the
+    # start-up CPU. Falls back to "spawn" where unavailable.
+    worker_start_method: Literal["spawn", "forkserver"] = "spawn"
     max_concurrent_jobs: int = Field(default=2, ge=1)  # simultaneous worker processes
     queue_timeout_s: float = Field(default=30.0, gt=0)  # wait for a free worker, then 503
     # Requests admitted at once (uploading, waiting or running). Bounds memory held

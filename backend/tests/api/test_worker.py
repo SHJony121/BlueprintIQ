@@ -4,14 +4,24 @@ import os
 import subprocess
 import sys
 import time
+from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
 
-from blueprintiq.api.worker import memory_limit_supported, run_job
+from blueprintiq.api.worker import memory_limit_supported, run_job, use_start_method
 from tests.api import child_import_fails, jobs
 
 BACKEND = Path(__file__).resolve().parents[2]
+
+
+@pytest.fixture(params=["spawn", "forkserver"], autouse=True)
+def start_method(request: pytest.FixtureRequest) -> Iterator[str]:
+    """Every guarantee below must hold however worker processes are started."""
+    if request.param == "forkserver" and sys.platform == "win32":
+        pytest.skip("no fork server on Windows")
+    yield use_start_method(request.param)
+    use_start_method("spawn")
 
 
 def test_successful_job_returns_its_value() -> None:

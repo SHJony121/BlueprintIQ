@@ -30,13 +30,23 @@ def label(pid: str) -> str | None:
         return None
     if "multiprocessing.spawn" in cmd or "spawn_main" in cmd:
         return "worker"
+    if "forkserver" in cmd:
+        return "forkserver?"  # the fork server and the workers forked from it look alike
     if "uvicorn" in cmd:
         return "backend"
     if "entrypoint.mjs" in cmd:
         return "supervisor"
-    if "next" in cmd and "node" in cmd:
+    if "next-server" in cmd or ("next" in cmd and "node" in cmd):
         return "frontend"
     return "other"
+
+
+def parent_of(pid: str) -> str:
+    try:
+        with open(f"/proc/{pid}/stat") as handle:
+            return handle.read().rsplit(")", 1)[1].split()[1]
+    except (OSError, IndexError):
+        return ""
 
 
 def rss_kb(pid: str) -> int:
@@ -70,12 +80,16 @@ def main() -> None:
         entry = data.setdefault(phase, {"cgroup_peak_kb": 0, "procs": {}})
         entry["cgroup_peak_kb"] = max(entry["cgroup_peak_kb"], read_int(CGROUP) // 1024)
         totals: dict[str, list[int]] = {}
+        fork_pids = {p for p in os.listdir("/proc") if p.isdigit() and label(p) == "forkserver?"}
         for pid in os.listdir("/proc"):
             if not pid.isdigit():
                 continue
             name = label(pid)
             if name is None:
                 continue
+            if name == "forkserver?":
+                # A fork-server worker has the fork server as its parent; the server does not.
+                name = "worker" if parent_of(pid) in fork_pids else "forkserver"
             totals.setdefault(name, []).append(rss_kb(pid))
         for name, values in totals.items():
             proc = entry["procs"].setdefault(name, {"rss_peak_kb": 0, "sum_peak_kb": 0, "count_peak": 0})

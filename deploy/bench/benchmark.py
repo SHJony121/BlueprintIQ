@@ -43,6 +43,14 @@ PROFILES: dict[str, tuple[list[str], dict[str, str]]] = {
     "reference-1536m-2cpu": (["--memory", "1536m", "--memory-swap", "1536m", "--cpus", "2"], {}),
     "512m-1cpu": (["--memory", "512m", "--memory-swap", "512m", "--cpus", "1"], {}),
     "render-free-512m-0.1cpu": (["--memory", "512m", "--memory-swap", "512m", "--cpus", "0.1"], {}),
+    "render-free-forkserver": (
+        ["--memory", "512m", "--memory-swap", "512m", "--cpus", "0.1"],
+        {"BLUEPRINTIQ_WORKER_START_METHOD": "forkserver"},
+    ),
+    "512m-1cpu-forkserver": (
+        ["--memory", "512m", "--memory-swap", "512m", "--cpus", "1"],
+        {"BLUEPRINTIQ_WORKER_START_METHOD": "forkserver"},
+    ),
 }
 
 
@@ -235,7 +243,7 @@ def summarize(report: dict) -> str:
             cells = " ".join(f"{r['status'] or r['code']}:{r['seconds']}" for r in result)
         lines.append(f"| {step['phase']} | {step['wall_s']} | {step['cpu_s']} | {step['throttled_s']} | {cells} |")
     lines += ["", "peak RSS per process kind (MiB; one process / all at once / most at once):", ""]
-    lines += ["| phase | container peak | " + " | ".join(["backend", "frontend", "worker"]) + " |", "|---|---|---|---|---|"]
+    lines += ["| phase | container peak | " + " | ".join(["backend", "frontend", "forkserver", "worker"]) + " |", "|---|---|---|---|---|---|"]
     for name, data in report["processes"].items():
         procs = data["procs"]
 
@@ -243,7 +251,7 @@ def summarize(report: dict) -> str:
             p = procs.get(kind)
             return "-" if p is None else f"{p['rss_peak_kb'] / 1024:.0f} / {p['sum_peak_kb'] / 1024:.0f} / {p['count_peak']}"
 
-        lines.append(f"| {name} | {data['cgroup_peak_kb'] / 1024:.0f} | {cell('backend')} | {cell('frontend')} | {cell('worker')} |")
+        lines.append(f"| {name} | {data['cgroup_peak_kb'] / 1024:.0f} | {cell('backend')} | {cell('frontend')} | {cell('forkserver')} | {cell('worker')} |")
     return "\n".join(lines)
 
 

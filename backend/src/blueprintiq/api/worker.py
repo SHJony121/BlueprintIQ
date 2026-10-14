@@ -1,7 +1,11 @@
 """Run untrusted PDF work in a separate, disposable process with hard limits.
 
-Each job runs in a fresh process started with the ``spawn`` method (identical on
-Windows and Linux; no state is inherited from the server). Limits:
+Each job runs in a fresh process. By default it is started with the ``spawn`` method
+(identical on Windows and Linux; no state is inherited from the server). On Linux the
+``forkserver`` method can be chosen instead (``use_start_method``): each job is still its own
+new process, killed when done, but it is forked from a small helper that has already imported
+the libraries, which saves most of the per-job start-up CPU. The helper never receives a
+drawing, and inherits nothing from the API server. Limits:
 
 * **Timeout, enforced twice.** The parent waits at most ``timeout_s`` and then kills
   the process. The child also runs a watchdog that exits on the same deadline, or
@@ -31,7 +35,9 @@ from typing import Any, Literal
 
 from blueprintiq.ingestion.errors import DocumentRejectedError
 
-_CONTEXT = multiprocessing.get_context("spawn")
+_CONTEXT: Any = multiprocessing.get_context("spawn")
+# Modules the fork server imports once, so that a job does not. They hold no per-request state.
+_PRELOAD = ["blueprintiq.api.worker", "blueprintiq.api.jobs"]
 _KILL_GRACE_S = 5.0
 _MAX_RESULT_BYTES = 64 * 1024 * 1024
 _WATCHDOG_EXIT = 70  # exit code when the child's own watchdog fires
@@ -48,6 +54,25 @@ class JobResult:
     message: str | None = None  # user-safe message when kind == "rejected"
     detail: str | None = None  # internal detail for server logs only; never sent to clients
     exitcode: int | None = None  # the worker's exit code once it has ended
+
+
+def use_start_method(method: str) -> str:
+    """Choose how worker processes are started and return the method actually in use.
+
+    ``forkserver`` falls back to ``spawn`` where the platform has none (Windows). Call it
+    before the first job: the fork server starts on first use and imports ``_PRELOAD`` then.
+    """
+    global _CONTEXT
+    if method == "forkserver" and "forkserver" in multiprocessing.get_all_start_methods():
+        context = multiprocessing.get_context("forkserver")
+        context.set_forkserver_preload(_PRELOAD)
+        _CONTEXT = context
+        from multiprocessing import forkserver  # not importable on Windows
+
+        forkserver.ensure_running()  # import in the background now, not on the first request
+        return "forkserver"
+    _CONTEXT = multiprocessing.get_context("spawn")
+    return "spawn"
 
 
 def run_job(

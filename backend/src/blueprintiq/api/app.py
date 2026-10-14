@@ -43,7 +43,7 @@ from blueprintiq.api.errors import REJECTION_STATUS, ApiError, ErrorResponse, er
 from blueprintiq.api.jobs import inspection_job
 from blueprintiq.api.logging_setup import configure_logging
 from blueprintiq.api.settings import Settings
-from blueprintiq.api.worker import JobResult, run_job
+from blueprintiq.api.worker import JobResult, run_job, use_start_method
 from blueprintiq.domain.models import InspectionReport
 from blueprintiq.ingestion.limits import MIB, IngestionLimits
 from blueprintiq.rules.config import Ruleset, load_ruleset
@@ -77,6 +77,8 @@ def create_app(settings: Settings | None = None, *, job: Job = inspection_job) -
     logger = configure_logging(settings.log_level)
     ruleset = load_ruleset(settings.ruleset_path)  # raises RulesetConfigError
     limits = IngestionLimits(max_bytes=settings.max_upload_bytes)
+    start_method = use_start_method(settings.worker_start_method)
+    logger.info("worker processes", extra={"event": "startup", "detail": start_method})
     # A thread semaphore (not asyncio's) so the limit holds whatever event loop runs
     # the request; it is taken inside the worker thread, with a bounded wait.
     workers = threading.BoundedSemaphore(settings.max_concurrent_jobs)
