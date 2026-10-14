@@ -1,0 +1,48 @@
+name: benchmark
+
+# Measures the production container under Linux memory and CPU limits (a Render-Free-like
+# 512 MiB / 0.1 CPU profile and two comparisons). Run by hand; the results are in the job log
+# and in the uploaded artifact. It deploys nothing and needs no secrets.
+on:
+  workflow_dispatch:
+  push:
+    branches: ["feat/launch3-**"]
+    paths: ["deploy/bench/**", ".github/workflows/benchmark.yml"]
+
+permissions:
+  contents: read
+
+jobs:
+  measure:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Host facts
+        run: |
+          uname -r
+          stat -fc %T /sys/fs/cgroup
+          nproc
+          free -m
+
+      - name: Build the production image
+        run: docker build --build-arg SOURCE_URL=https://example.org/owner/blueprintiq -t blueprintiq:bench .
+
+      - name: Make the synthetic inputs
+        run: python3 deploy/bench/make_inputs.py "$RUNNER_TEMP/inputs"
+
+      - name: Benchmark
+        run: python3 deploy/bench/benchmark.py blueprintiq:bench "$RUNNER_TEMP/inputs" "$RUNNER_TEMP/results.json" | tee "$RUNNER_TEMP/summary.md"
+
+      - name: Summary
+        if: always()
+        run: |
+          cat "$RUNNER_TEMP/summary.md" >> "$GITHUB_STEP_SUMMARY" || true
+          cp "$RUNNER_TEMP/results.json" results.json || true
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: benchmark-results
+          path: results.json
