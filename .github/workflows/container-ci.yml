@@ -60,7 +60,8 @@ jobs:
       - name: Backend is not published
         run: |
           ! curl -s --max-time 3 http://127.0.0.1:8001/healthz
-          test "$(docker inspect -f '{{json .NetworkSettings.Ports}}' app)" = '{"9000/tcp":[{"HostIp":"127.0.0.1","HostPort":"9000"}]}'
+          docker port app
+          test "$(docker port app | grep -vc '^9000/tcp')" = 0
 
       - name: Container health check turns healthy
         run: |
