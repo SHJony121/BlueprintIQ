@@ -63,11 +63,16 @@ def fork_server_and_workers() -> tuple[int | None, list[int]]:
     return server, workers
 
 
-def record(name: str, ok: bool, **facts: object) -> None:
+def record(name: str, ok: bool, *, informational: bool = False, **facts: object) -> None:
+    """Record a scenario. An informational one (the control) is reported, never asserted."""
     state = bm.inspect_state()
-    ok = ok and state["running"] and not state["oom_killed"]
-    results.append({"scenario": name, "ok": ok, "container": state, **facts})
-    print(f"[{'ok' if ok else 'FAIL'}] {name}: {json.dumps(facts, default=str)} container={state}", flush=True)
+    if informational:
+        label, ok = "info", True
+    else:
+        ok = ok and state["running"] and not state["oom_killed"]
+        label = "ok" if ok else "FAIL"
+    results.append({"scenario": name, "ok": ok, "informational": informational, "container": state, **facts})
+    print(f"[{label}] {name}: {json.dumps(facts, default=str)} container={state}", flush=True)
 
 
 def legit(files: dict[str, bytes], names: tuple[str, ...]) -> dict[str, int]:
@@ -112,7 +117,7 @@ def memory(files: dict[str, bytes], limits: list[str], image: str, bench: Path) 
             "health": bm.health(),
         }
         if mode == "control":
-            record("memory:control (no data cap, no oom priority)", after == 200 and facts["health"], **facts)
+            record("memory:control (no data cap, no oom priority)", True, informational=True, **facts)
         else:
             record(
                 "memory:protected",
