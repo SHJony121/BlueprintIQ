@@ -37,7 +37,7 @@ def inspect(api: TestClient, name: str) -> InspectionReport:
 
 def test_committed_samples_match_the_generator_byte_for_byte() -> None:
     rendered = GEN.render()
-    assert len(rendered) == 4
+    assert len(rendered) == 5
     stale = [p.name for p, data in rendered.items() if not p.exists() or p.read_bytes() != data]
     assert stale == [], f"run scripts/generate_samples.py; stale: {stale}"
 
@@ -111,3 +111,34 @@ def test_the_review_sample_asks_for_a_person_instead_of_guessing(api: TestClient
     assert report.summary.failed == 0  # nothing ambiguous is turned into a fail or a pass
     assert all(a.status.value == "ambiguous" for a in report.cad_annotations)
     assert len(report.feature_associations) == 0  # ambiguous annotations are not associated
+
+
+def test_the_complex_sample_ties_chained_vertical_and_stacked_dimensions(api: TestClient) -> None:
+    report = inspect(api, GEN.COMPLEX)
+    # No labelled thickness, diameter or length: those rules are missing, not failed or passed.
+    outcomes = {f.rule_id: f.status.value for f in report.findings}
+    assert outcomes == {
+        "THK-MIN-001": "missing",
+        "DIA-MAX-001": "missing",
+        "LEN-RANGE-001": "missing",
+        "MAT-REQ-001": "pass",  # the same material written twice, in two languages
+    }
+    texts = {a.id: a.source.raw_text for a in report.cad_annotations}
+    assert sorted(texts.values()) == sorted(
+        [
+            "R20",
+            "Ø8 ±0.05",
+            "70 +0/-0.3",
+            "160 ±0.2",
+            "Ø12",
+            "60",
+            "80 ±0.1",
+            "80",
+            "300",
+        ]
+    )
+    stacked = [a.source.raw_text for a in report.cad_annotations if a.tolerance_source == "stacked"]
+    assert stacked == ["60"]
+    status = {texts[a.annotation_id]: a.status.value for a in report.feature_associations}
+    assert set(status.values()) == {"verified"} and len(status) == 9
+    assert report.skipped_angled_lines == 1  # the angled note is reported as not read

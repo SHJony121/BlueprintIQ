@@ -41,6 +41,10 @@ BlueprintIQ reads the **text and the vector lines** inside a one-page engineerin
     <td width="50%"><img src="docs/screenshots/readme-5-radius-angle.png" alt="A radius dimension tied to a rounded corner"><br><sub><b>Radius tied to its arc.</b> The angle is read but not associated: angles are outside what it supports.</sub></td>
   </tr>
   <tr>
+    <td width="50%"><img src="docs/screenshots/readme-7-complex-chain.png" alt="A stacked tolerance highlighted inside three chained dimensions that share one dimension line"><br><sub><b>The hard sheet (sample E).</b> A stacked tolerance picked out of three dimensions chained on one line, with vertical text and leaders around it.</sub></td>
+    <td width="50%"><img src="docs/screenshots/readme-6-complex-summary.png" alt="An incomplete extraction warning above three Missing findings and one Pass"><br><sub><b>Honest about what it skipped.</b> An angled note is not read, and a warning says the results are not a full inspection.</sub></td>
+  </tr>
+  <tr>
     <td width="50%"><img src="docs/screenshots/readme-3-stacked-tolerance.png" alt="A stacked tolerance reconstructed from two printed lines"><br><sub><b>Stacked tolerance.</b> Two separate printed lines rebuilt as <code>60 +0 / -0.2</code>, each kept as printed.</sub></td>
     <td width="50%" align="center"><img src="docs/screenshots/launch2-results-mobile.png" alt="Results on a phone" width="220"><br><sub><b>On a phone.</b> Full results; the drawing viewer needs a wider screen and says so.</sub></td>
   </tr>
@@ -56,6 +60,7 @@ There is **no public live demo yet**. [Run it locally](#run-it-locally) in a few
 | **B. CAD-style plate**<br>[download](frontend/public/samples/blueprintiq-sample-cad.pdf) | Dimension lines, arrowheads, a leader, `±` and stacked tolerances | **4 Pass**. Five CAD dimensions: `120`, `88 ±0.1`, `60 +0/-0.2`, `Ø20` tied to the drawing; `30` **unresolved** (no arrowheads) |
 | **C. Radius, tolerances, angle**<br>[download](frontend/public/samples/blueprintiq-sample-features.pdf) | `R30` on a rounded corner, `Ø12 ±0.05`, `160 +0.2/-0.1`, a chamfer angle | **4 Pass**. Radius, diameter and linear tied to the drawing; `45° ±0.5°` read, association **not supported** |
 | **D. Needs a person**<br>[download](frontend/public/samples/blueprintiq-sample-review.pdf) | Values that must not be guessed | **1 Pass, 3 Needs review, 0 Fail**; two ambiguous CAD lines left untied |
+| **E. Complex bracket** (hardest)<br>[download](frontend/public/samples/blueprintiq-sample-complex.pdf) | A dense CAD sheet: three dimensions chained on one shared line, a stacked and three inline tolerances, vertical dimension text, two leaders and a rounded corner, a unit note in English and French, material in two languages, and a note written at an angle | **1 Pass, 3 Missing, 0 Fail** (no labelled thickness, diameter or length, as on many real CAD sheets; the material is the same text twice, so it passes). **9 CAD dimensions, all tied to the drawing.** The angled note is **not read**, and the report says so ("Incomplete extraction") |
 
 **Walkthrough.** Start the app and open <http://127.0.0.1:3000/inspect>.
 

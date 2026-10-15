@@ -10,6 +10,7 @@ deterministic; a test checks that the committed files match what this script pro
 
 import math
 import sys
+from itertools import pairwise
 from pathlib import Path
 
 BACKEND = Path(__file__).resolve().parents[1]
@@ -32,6 +33,7 @@ BASIC = "blueprintiq-sample-basic.pdf"
 CAD = "blueprintiq-sample-cad.pdf"
 FEATURES = "blueprintiq-sample-features.pdf"
 REVIEW = "blueprintiq-sample-review.pdf"
+COMPLEX = "blueprintiq-sample-complex.pdf"
 
 
 def line(x0: float, y0: float, x1: float, y1: float) -> Shape:
@@ -230,12 +232,103 @@ def review() -> bytes:
     return build_pdf(DocumentSpec(pages=(page,)))
 
 
+def complex_bracket() -> bytes:
+    """Sample E: a dense CAD-style bracket, the hardest sample. Chained dimensions that share one
+    dimension line, stacked and inline tolerances, vertical dimension text, two leaders, a
+    bilingual material block with the value on the label row, a unit note in two languages, and a
+    note written at an angle (which is skipped and reported). There are no labelled
+    THICKNESS/DIAMETER/LENGTH notes, as on many real CAD sheets, so those rules report missing."""
+    shapes: list[Shape] = []
+    runs: list[TextRun] = [
+        text("BlueprintIQ sample E: chained and stacked dimensions", 72, 80, 14),
+        text("Original synthetic example. Not a real part.", 72, 100),
+        text(
+            "All dimensions are in millimeter / Toutes les dimensions sont en millim\u00e8tres",
+            72,
+            780,
+        ),
+        text("Material :", 72, 640),
+        text("PA66 GF30", 150, 640),
+        text("Mati\u00e8re :", 72, 656),
+        text("PA66 GF30", 150, 656),
+        TextRun("4x R2 ALL EDGES", 120, 200, size=10, angle=30),
+    ]
+
+    # Part outline: an L-shaped bracket with a rounded top-right corner.
+    x0, x1, xl = 120.0, 420.0, 340.0
+    top, mid, bottom, corner = 260.0, 330.0, 420.0, 20.0
+    shapes += [
+        line(x0, top, x1 - corner, top),
+        Shape("polyarc", (x1 - corner, top + corner, corner, -90, 0, 24)),
+        line(x1, top + corner, x1, mid),
+        line(x1, mid, xl, mid),
+        line(xl, mid, xl, bottom),
+        line(xl, bottom, x0, bottom),
+        line(x0, bottom, x0, top),
+    ]
+
+    # Two holes with leaders, and a leader to the rounded corner.
+    shapes.append(Shape("polycircle", (180, 295, 12, 48)))
+    sh, tx = leader(180, 295, 12, -90, "\u00d88 \u00b10.05", length=40)
+    shapes += sh
+    runs.append(tx)
+    shapes.append(Shape("polycircle", (260, 375, 16, 48)))
+    sh, tx = leader(260, 375, 16, 45, "\u00d812", length=30)
+    shapes += sh
+    runs.append(tx)
+    sh, tx = leader(x1 - corner, top + corner, corner, -45, "R20", length=34)
+    shapes += sh
+    runs.append(tx)
+
+    # A chain of three dimensions sharing one dimension line below the part.
+    yc = bottom + 50
+    xs = [120.0, 180.0, 260.0, 340.0]
+    for x in xs:
+        shapes.append(line(x, bottom + 5, x, yc + 8))
+    shapes.append(line(xs[0], yc, xs[-1], yc))
+    for a, b in pairwise(xs):
+        shapes += [arrow((a, yc), (-1, 0)), arrow((b, yc), (1, 0))]
+    # 60 with a stacked tolerance, 80 with an inline tolerance, a plain 80.
+    runs += [
+        text("60", 142, yc - 3),
+        text("+0", 142 + 14 + 3, yc - 3 - 6, 6),
+        text("-0.2", 142 + 14 + 3, yc - 3 + 9, 6),
+        centred("80 \u00b10.1", 220, yc - 3),
+        centred("80", 300, yc - 3),
+    ]
+
+    # Overall width on a second dimension line.
+    yo = yc + 45
+    shapes += [
+        line(x0, bottom + 5, x0, yo + 8),
+        line(x1, mid + 5, x1, yo + 8),
+        line(x0, yo, x1, yo),
+    ]
+    shapes += [arrow((x0, yo), (-1, 0)), arrow((x1, yo), (1, 0))]
+    runs.append(centred("300", (x0 + x1) / 2, yo - 3))
+
+    # Two vertical dimensions at the right, text written upwards.
+    def vertical(xline: float, y_a: float, y_b: float, label: str, ext_from: float) -> None:
+        shapes.extend([line(ext_from, y_a, xline + 8, y_a), line(ext_from, y_b, xline + 8, y_b)])
+        shapes.append(line(xline, y_a, xline, y_b))
+        shapes.extend([arrow((xline, y_a), (0, -1)), arrow((xline, y_b), (0, 1))])
+        width = text_width(label, "Helvetica", SIZE)
+        runs.append(TextRun(label, xline - 3, (y_a + y_b) / 2 + width / 2, size=SIZE, angle=90))
+
+    vertical(470.0, top, mid, "70 +0/-0.3", x1 + 5)
+    vertical(505.0, top, bottom, "160 \u00b10.2", x1 + 5)
+
+    page = PageSpec(media_box=A4, runs=tuple(runs), shapes=tuple(shapes))
+    return build_pdf(DocumentSpec(pages=(page,)))
+
+
 def render() -> dict[Path, bytes]:
     return {
         SAMPLES / BASIC: basic(),
         SAMPLES / CAD: cad(),
         SAMPLES / FEATURES: features(),
         SAMPLES / REVIEW: review(),
+        SAMPLES / COMPLEX: complex_bracket(),
     }
 
 
