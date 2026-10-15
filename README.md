@@ -49,6 +49,10 @@ BlueprintIQ reads the **text and the vector lines** inside a one-page engineerin
     <td width="50%"><img src="docs/screenshots/readme-6-complex-summary.png" alt="An incomplete extraction warning above three Missing findings and one Pass"><br><sub><b>Honest about what it skipped.</b> An angled note is not read, and a warning says the results are not a full inspection.</sub></td>
   </tr>
   <tr>
+    <td width="50%"><img src="docs/screenshots/readme-9-real-association.png" alt="A real SolidWorks drawing with a stacked tolerance tied to its extension lines, highlighted on the page"><br><sub><b>A real drawing (sample F).</b> A stacked tolerance <code>3.7 +0 / -0.2</code> rebuilt from two printed lines and tied to its extension lines (blue).</sub></td>
+    <td width="50%"><img src="docs/screenshots/readme-8-real-summary.png" alt="The incomplete extraction warning above three Missing findings and one Needs review, beside the real drawing"><br><sub><b>What it will not claim.</b> Two angled lines were not read, so a warning says this is not a full inspection.</sub></td>
+  </tr>
+  <tr>
     <td width="50%"><img src="docs/screenshots/readme-3-stacked-tolerance.png" alt="A stacked tolerance reconstructed from two printed lines"><br><sub><b>Stacked tolerance.</b> Two separate printed lines rebuilt as <code>60 +0 / -0.2</code>, each kept as printed.</sub></td>
     <td width="50%" align="center"><img src="docs/screenshots/launch2-results-mobile.png" alt="Results on a phone" width="220"><br><sub><b>On a phone.</b> Full results; the drawing viewer needs a wider screen and says so.</sub></td>
   </tr>
@@ -65,6 +69,7 @@ BlueprintIQ reads the **text and the vector lines** inside a one-page engineerin
 | **C. Radius, tolerances, angle**<br>[download](frontend/public/samples/blueprintiq-sample-features.pdf) | `R30` on a rounded corner, `Ø12 ±0.05`, `160 +0.2/-0.1`, a chamfer angle | **4 Pass**. Radius, diameter and linear tied to the drawing; `45° ±0.5°` read, association **not supported** |
 | **D. Needs a person**<br>[download](frontend/public/samples/blueprintiq-sample-review.pdf) | Values that must not be guessed | **1 Pass, 3 Needs review, 0 Fail**; two ambiguous CAD lines left untied |
 | **E. Complex bracket** (hardest)<br>[download](frontend/public/samples/blueprintiq-sample-complex.pdf) | A dense CAD sheet: three dimensions chained on one shared line, a stacked and three inline tolerances, vertical dimension text, two leaders and a rounded corner, a unit note in English and French, material in two languages, and a note written at an angle | **1 Pass, 3 Missing, 0 Fail** (no labelled thickness, diameter or length, as on many real CAD sheets; the material is the same text twice, so it passes). **9 CAD dimensions, all tied to the drawing.** The angled note is **not read**, and the report says so ("Incomplete extraction") |
+| **F. A real CAD drawing** (the tough one)<br>[download](docs/samples/real-cad-drawing.pdf) | A drawing exported from SolidWorks, not generated: French and English notes, 15 dimensions in dense stacks, 8 stacked tolerances, angled text, a bilingual material block | **3 Missing, 1 Needs review, 0 Fail** (no labelled thickness, diameter or length; the two material names differ, so it is not auto-passed). **15 of 15 dimensions tied to the drawing**, 8 stacked tolerances rebuilt. 2 angled lines are **not read**, and the report says so |
 
 **Walkthrough.**
 
@@ -81,6 +86,22 @@ BlueprintIQ reads the **text and the vector lines** inside a one-page engineerin
 
 A *dimension* is a measurement printed on the drawing. Its *tolerance* says how far the real part may differ (`±0.1`, or `+0` above `-0.2` printed as a *stacked* tolerance). *Extension lines* run from the part to the *dimension line*, whose arrowheads mark what is measured. A *leader* is a line from a note to a feature such as a hole.
 </details>
+
+## A real CAD drawing
+
+Sample F is **not generated**: it is a drawing exported from SolidWorks, included with its owner's permission under this project's licence. It is the hardest input BlueprintIQ has been tried on, and it is shown with its limits, not just its successes. What the app actually produces on it:
+
+| | Result |
+|---|---|
+| **Dimensions** | 15 linear dimensions read, **all 15 tied to the drawing** (each to its dimension line, two terminators and extension lines). The page has 27 arrowheads, 7 dot terminators and 229 straight runs. |
+| **Tolerances** | **8 stacked** (two separate printed lines rebuilt beside their value, each kept as printed) and 2 inline `±`. |
+| **Material** | Written twice (`POM C noir` and `black polyoxymethylene`, French and English labels with the value beside the label). The two differ, so the rule ends **Needs review**: BlueprintIQ does not decide they mean the same thing. |
+| **Labelled notes** | None (this sheet has no `THICKNESS:`-style notes), so the thickness, diameter and length rules are **Missing**, never passed. |
+| **Not read** | Two lines written at an angle, and a banner says the results are not a full inspection. One line the grammar does not cover is kept as an ambiguous observation. No diameter or radius dimension is read on this sheet, so those two kinds are still validated on generated drawings only. |
+
+![A stacked tolerance on the real drawing, highlighted on the page](docs/screenshots/readme-9-real-association.png)
+
+It is one drawing: the result shows the approach works on a real export, and proves nothing about other drawings. The material and its two names come from the drawing itself. Try it with [the download](docs/samples/real-cad-drawing.pdf).
 
 ## How it works
 
@@ -162,7 +183,7 @@ Also `npm run lint`, `npm run typecheck` and `npm run api:check` (generated API 
 
 ## Limitations
 
-* **Tested on synthetic drawings and one real CAD export.** Real-world coverage (embedded fonts, per-glyph positioning, hatch clips) and Japanese drawings are not benchmarked; some valid drawings will be refused or flagged ambiguous. No accuracy figure is claimed.
+* **Tested on synthetic drawings and one real CAD export** (sample F above). Real-world coverage (embedded fonts, per-glyph positioning, hatch clips) and Japanese drawings are not benchmarked; some valid drawings will be refused or flagged ambiguous. No accuracy figure is claimed.
 * **One page, selectable text only.** No scans or OCR, no DWG, no multi-page files, no `/UserUnit` scaling.
 * **Angled text is not read.** It is skipped and the report says "Incomplete extraction" with the number of lines. If such a line carries a supported label (`THICKNESS:` and so on), the file is refused (`UNSUPPORTED_GEOMETRY`) instead.
 * **Conventions it understands:** English labels and a documented annotation grammar. CAD dimensions and tolerances (`2.7 ±0.1`, `Ø12`, `R1.5`, `75° ±0.5°`) are listed as **CAD annotations**, read as written; no rule checks them ([CAD annotations](docs/cad-annotations.md)). GD&T frames, threads, ordinate dimensions and comma decimals are not read.
