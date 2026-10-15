@@ -1,285 +1,190 @@
-# BlueprintIQ
+<h1 align="center">BlueprintIQ</h1>
 
-**Engineering drawing intelligence.** BlueprintIQ reads labeled annotations (`THICKNESS: 4 mm`, `MATERIAL: SS400`, …) from 2D vector engineering drawings in PDF form, checks them against configurable inspection rules, and returns findings that point back to the exact place on the drawing where each value was read.
+<p align="center">
+  <strong>Evidence-backed inspection of engineering drawings.</strong><br>
+  Upload a PDF drawing, check its dimensions and material against your limits, and see exactly where every result came from.
+</p>
 
-> **Assistive prototype, not certified compliance software.** BlueprintIQ does not guarantee engineering safety, regulatory compliance, or manufacturing correctness. The rule thresholds shipped here are **demonstration values**, not industry or company standards. Findings must be reviewed by a qualified person.
+<p align="center">
+  <a href="https://github.com/SHJony121/BlueprintIQ/actions/workflows/backend-ci.yml"><img alt="backend CI" src="https://github.com/SHJony121/BlueprintIQ/actions/workflows/backend-ci.yml/badge.svg"></a>
+  <a href="https://github.com/SHJony121/BlueprintIQ/actions/workflows/frontend-ci.yml"><img alt="frontend CI" src="https://github.com/SHJony121/BlueprintIQ/actions/workflows/frontend-ci.yml/badge.svg"></a>
+  <a href="https://github.com/SHJony121/BlueprintIQ/actions/workflows/container-ci.yml"><img alt="container CI" src="https://github.com/SHJony121/BlueprintIQ/actions/workflows/container-ci.yml/badge.svg"></a>
+  <a href="LICENSE"><img alt="License: AGPL-3.0-or-later" src="https://img.shields.io/badge/license-AGPL--3.0--or--later-blue"></a>
+</p>
 
-> **Status:** a working **local full-stack MVP** (FastAPI backend plus Next.js frontend with a PDF viewer). It is verified against **synthetic fixtures only**; real industrial CAD PDFs, embedded fonts and Japanese drawings have not been tested. It is not yet deployed publicly (see [deployment](docs/deployment.md) and [Security](docs/security-and-deployment.md)). The code is licensed under AGPL-3.0-or-later.
+<p align="center">
+  <img src="docs/screenshots/readme-2-cad-association.png" alt="BlueprintIQ inspecting a CAD-style drawing: the drawing with evidence boxes on the left, and on the right the CAD dimensions it read, a diameter tied to its drawn circle and a dimension it could not tie, with the reason" width="900">
+</p>
+
+> **An assistive prototype, not certified compliance software.** The inspection limits it ships with are demonstration values, not engineering standards, and every result is meant to be checked by a qualified person.
 
 ## What it does
 
-```
-PDF drawing ─▶ validated text lines with page-space boxes ─▶ typed measurements ─▶ rule findings with evidence
-```
+BlueprintIQ reads the **text and the vector lines** inside a one-page engineering drawing PDF (the kind a CAD program exports) and turns them into results you can trust or question:
 
-* **Deterministic.** No AI model is involved. Every value, comparison and explanation is reproducible.
-* **Honest about uncertainty.** An annotation the parser cannot read with certainty (`THICKNESS: 4` with no unit, `2,5 mm`, `100 ± 0.5 mm`, `4 M`) is kept as **ambiguous** and can only ever produce **`needs_review`**, never a confirmed pass or fail. A missing annotation is **`missing`**, which is different from a known violation.
-* **Traceable.** Each finding cites the measurements it used; each measurement carries its raw text, page number and bounding box.
-* **Exact.** All numbers are `Decimal`. Unit conversion (mm, cm, m, in) is exact; JSON carries numbers as strings.
+- **Checks labelled values against your limits.** Notes like `THICKNESS: 4 mm` and `MATERIAL: S235JR` become measurements, checked against minimums and maximums you set. Each rule ends as **Pass**, **Fail**, **Missing** or **Needs review**.
+- **Reads CAD dimensions and tolerances as written:** `88 ±0.1`, `Ø20`, `R30`, `160 +0.2/-0.1`, and tolerances printed on two lines (`60` with `+0` over `-0.2`).
+- **Ties dimensions to the drawing.** When the drawing's own lines prove it (arrowheads on extension lines, a leader ending on a circle or arc), a dimension is linked to the geometry it measures and highlighted on the page. When they don't, it says *unresolved* and why.
+- **Shows its evidence.** Every result points to the exact text and lines it came from, drawn over the PDF in the browser.
+- **Never guesses.** A value with no unit, a comma decimal or two conflicting materials becomes **Needs review**, never a pass or a fail.
+- **No AI, no machine learning.** Fixed, deterministic rules: the same file always gives the same result.
 
-## Try BlueprintIQ yourself
+## Screenshots
 
-There is **no public live demo yet** (a free-hosting trial is prepared but not deployed). Run it locally with the [Quick start](#quick-start-backend-and-frontend-local-only) below; it takes a few minutes. Then use these sample drawings. They are **original synthetic drawings made for this project** (invented parts and numbers, no third-party content), and every expected result below was checked against the running application. The same results are locked in by tests (`backend/tests/api/test_samples.py`), so they cannot drift silently.
+<table>
+  <tr>
+    <td width="50%"><img src="docs/screenshots/launch2-landing-desktop.png" alt="The landing page"><br><sub><b>Landing page.</b> What it does, which drawings it supports, and its limits.</sub></td>
+    <td width="50%"><img src="docs/screenshots/readme-1-basic-fail.png" alt="A failing thickness finding with its evidence box on the drawing"><br><sub><b>A failed rule and its evidence.</b> The thickness is below the minimum; the box marks the exact text it was read from.</sub></td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="docs/screenshots/readme-4-needs-review.png" alt="Three findings that need review and one pass"><br><sub><b>Needs review, not guesses.</b> A value with no unit, a comma decimal and two different materials are sent to a person.</sub></td>
+    <td width="50%"><img src="docs/screenshots/readme-5-radius-angle.png" alt="A radius dimension tied to a rounded corner"><br><sub><b>Radius tied to its arc.</b> The angle is read but not associated: angles are outside what it supports.</sub></td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="docs/screenshots/readme-3-stacked-tolerance.png" alt="A stacked tolerance reconstructed from two printed lines"><br><sub><b>Stacked tolerance.</b> Two separate printed lines rebuilt as <code>60 +0 / -0.2</code>, each kept as printed.</sub></td>
+    <td width="50%" align="center"><img src="docs/screenshots/launch2-results-mobile.png" alt="Results on a phone" width="220"><br><sub><b>On a phone.</b> Full results; the drawing viewer needs a wider screen and says so.</sub></td>
+  </tr>
+</table>
 
-| Sample | What it shows | Expected result with the demonstration limits |
+## Try it yourself
+
+There is **no public live demo yet**. [Run it locally](#run-it-locally) in a few minutes, then use these sample drawings. They are original synthetic drawings made for this project (invented parts, no third-party content). Every expected result below was checked against the running app, and tests (`backend/tests/api/test_samples.py`) keep it that way.
+
+| Sample | Shows | Expected result (demonstration limits) |
 |---|---|---|
-| **A. Labelled plate**<br>[download PDF](frontend/public/samples/blueprintiq-sample-basic.pdf) | Labelled notes (`THICKNESS: 2.5 mm`, `DIAMETER`, `LENGTH`, `MATERIAL`) checked against rules | **3 Pass, 1 Fail.** Thickness 2.5 mm is below the 3 mm demonstration minimum. |
-| **B. CAD-style plate**<br>[download PDF](frontend/public/samples/blueprintiq-sample-cad.pdf) | Real dimension graphics: extension lines, arrowheads, a leader to a hole, a `±` tolerance and a tolerance stacked on two lines | **4 Pass** from the labelled notes. Separately, 5 CAD dimensions read: `120`, `88 ±0.1`, `60 +0/-0.2` (stacked), `Ø20` **tied to the lines they refer to**; `30` **unresolved** (its line has no arrowheads or extension lines). |
-| **C. Radius, tolerances and an angle**<br>[download PDF](frontend/public/samples/blueprintiq-sample-features.pdf) | A rounded corner with an `R30` leader, a toleranced hole `Ø12 ±0.05`, an asymmetric tolerance `160 +0.2/-0.1`, a chamfer angle | **4 Pass.** `R30` tied to the drawn arc, `Ø12 ±0.05` to the circle, `160 +0.2/-0.1` to its extension lines. `45° ±0.5°` is read, but its association is reported as **not supported** (angles are out of scope). |
-| **D. Annotations that need a person**<br>[download PDF](frontend/public/samples/blueprintiq-sample-review.pdf) | Values that must not be guessed: no unit, a comma decimal, two different materials, a dimension with no unit note, a lone tolerance fragment | **1 Pass, 3 Needs review, 0 Fail.** `THICKNESS: 4` (no unit), `DIAMETER: 2,5 mm` (comma decimal) and `S235JR` vs `S355J2` (two materials) all need review. The CAD lines `Ø12 ±0.05` and `+0.1` stay **ambiguous** and are not tied to any geometry. |
+| **A. Labelled plate**<br>[download](frontend/public/samples/blueprintiq-sample-basic.pdf) | Labelled notes checked against rules | **3 Pass, 1 Fail**: thickness 2.5 mm is below the 3 mm minimum |
+| **B. CAD-style plate**<br>[download](frontend/public/samples/blueprintiq-sample-cad.pdf) | Dimension lines, arrowheads, a leader, `±` and stacked tolerances | **4 Pass**. Five CAD dimensions: `120`, `88 ±0.1`, `60 +0/-0.2`, `Ø20` tied to the drawing; `30` **unresolved** (no arrowheads) |
+| **C. Radius, tolerances, angle**<br>[download](frontend/public/samples/blueprintiq-sample-features.pdf) | `R30` on a rounded corner, `Ø12 ±0.05`, `160 +0.2/-0.1`, a chamfer angle | **4 Pass**. Radius, diameter and linear tied to the drawing; `45° ±0.5°` read, association **not supported** |
+| **D. Needs a person**<br>[download](frontend/public/samples/blueprintiq-sample-review.pdf) | Values that must not be guessed | **1 Pass, 3 Needs review, 0 Fail**; two ambiguous CAD lines left untied |
 
-Samples A and B are also offered by the **Try a sample** buttons in the app; C and D you upload like any file.
+**Walkthrough.** Start the app and open <http://127.0.0.1:3000/inspect>.
 
-### Walkthrough (no engineering background needed)
+1. Drop a sample PDF on the upload area, or press a **Try a sample** button (samples A and B).
+2. The inspection runs at once against the demonstration limits (thickness at least 3 mm, diameter at most 50 mm, length 10 to 500 mm, a material written). Open **Inspection requirements** to change them and press **Run inspection**.
+3. Read the summary (Fail, Needs review, Missing, Pass) and each finding: the rule, the expected and actual value, and the measurement used.
+4. Look at **Extracted measurements** and **CAD annotations** to see what was read and how.
+5. On a wide screen, select a finding to highlight its evidence, or press **Show on drawing** on a CAD dimension to see the lines it is tied to.
 
-1. **Download a sample** from the table, for example sample B.
-2. **Open BlueprintIQ:** start it with the [Quick start](#quick-start-backend-and-frontend-local-only) and go to <http://127.0.0.1:3000/inspect>.
-3. **Choose the drawing:** drop the PDF on the upload area or click *choose a file* (or press *Inspect "CAD-style plate"* under **Try a sample**).
-4. **Limits:** the *Inspection requirements* start at the demonstration values (minimum thickness 3 mm, maximum diameter 50 mm, length 10 to 500 mm, a material must be written). They are examples, not engineering standards; open the panel to change them.
-5. **Run:** choosing a file runs the inspection at once. After changing a limit, press **Run inspection** or **Run again**.
-6. **Read what was extracted:** *Extracted measurements* lists the labelled values with their source text; *CAD annotations* lists the dimensions and tolerances exactly as written, with how each value and tolerance was read.
-7. **Read the findings:** the summary shows how many rules ended as **Fail**, **Needs review**, **Missing** or **Pass**; each finding states the rule, the expected and actual values and the measurement it used. Only the outcomes the drawing really produces appear.
-8. **See the evidence on the drawing** (on a screen at least 1024 px wide): every finding has a box where its text was read. In *CAD annotations*, press **Show on drawing** to see the lines a verified dimension is tied to.
+**Rule findings and geometry associations are different things.** A *rule finding* compares a labelled value with your limit and can pass or fail. A *geometry association* only says which drawn lines or circle a dimension refers to: it is *verified*, *unresolved* (with the reason) or *not supported*, and it can never fail a part.
 
-### What a result looks like
+<details>
+<summary><b>New to engineering drawings?</b></summary>
 
-**A finding with its evidence.** Sample A: the thickness rule fails, and the box on the drawing is the exact text it was read from.
+A *dimension* is a measurement printed on the drawing. Its *tolerance* says how far the real part may differ (`±0.1`, or `+0` above `-0.2` printed as a *stacked* tolerance). *Extension lines* run from the part to the *dimension line*, whose arrowheads mark what is measured. A *leader* is a line from a note to a feature such as a hole.
+</details>
 
-![Sample A: the failing thickness finding and its evidence box on the drawing](docs/screenshots/readme-1-basic-fail.png)
+## How it works
 
-**A dimension tied to the drawing.** Sample B: `Ø20` is tied to the drawn circle because its leader ends in an arrowhead on the circle, pointing along a radius. The `30` next to it is listed as unresolved, with the reason.
+```mermaid
+flowchart LR
+    U[Browser<br/>Next.js + PDF.js] -->|PDF upload| P[Next.js server proxy<br/>host checks, rate limits, 10 MiB cap]
+    P --> A[FastAPI]
+    A -->|one fresh process per job| W[Worker<br/>time and memory limits]
+    W --> T[Read text and<br/>vector lines]
+    T --> M[Measurements and<br/>CAD dimensions]
+    M --> R[Rules engine]
+    M --> G[Geometry<br/>association]
+    R --> J[Report with evidence]
+    G --> J
+    J --> U
+```
 
-![Sample B: the diameter association drawn on the page, and an unresolved dimension with its reason](docs/screenshots/readme-2-cad-association.png)
+- **Extraction** (PyMuPDF): visible text lines with exact page positions, and the drawing's lines, circles, arcs and arrowheads. Clipped, hidden and angled text is not treated as readable.
+- **Parsing** with exact decimals and unit conversion; anything uncertain is flagged, never guessed.
+- **Rules** from a TOML file or from the limits you enter, evaluated deterministically.
+- **Isolation:** every inspection runs in its own short-lived process with a time limit and a memory cap, so a bad file cannot take the service down.
+- **Viewer:** PDF.js renders the drawing in the browser and the evidence is drawn in the same coordinates, correct for rotated and cropped pages.
 
-More: [the stacked tolerance in sample B](docs/screenshots/readme-3-stacked-tolerance.png) (two separate printed lines reconstructed as `60 +0 / -0.2`, each shown as printed) and [the radius in sample C](docs/screenshots/readme-5-radius-angle.png) (tied to the rounded corner; the angle is read but not associated).
+More detail: [architecture](docs/architecture.md), [CAD annotations](docs/cad-annotations.md), [feature association](docs/feature-association.md).
 
-### Why "Needs review" matters
+## Tech stack
 
-A drawing that says `THICKNESS: 4` does not say 4 *what*. A tool that assumed millimetres would pass it against a 3 mm minimum, and would be wrong if the drawing meant something else. BlueprintIQ does not guess: sample D gives **3 Needs review and 0 Fail**, and the one Pass is the only value written unambiguously (`LENGTH: 120 mm`).
+| Area | Technology |
+|---|---|
+| Backend | Python 3.12, FastAPI, Pydantic, PyMuPDF, uvicorn |
+| Frontend | Next.js 16, React 19, TypeScript, Tailwind CSS 4, PDF.js |
+| Quality | pytest, mypy (strict), ruff, Vitest, Testing Library, Playwright |
+| Delivery | Docker (single non-root container), GitHub Actions |
 
-![Sample D: three findings need review, one passes, none is guessed](docs/screenshots/readme-4-needs-review.png)
+## Run it locally
 
-### Rule findings and geometry associations are different things
-
-| | Rule findings | Geometry associations |
-|---|---|---|
-| Comes from | Labelled notes such as `THICKNESS: 4 mm` | CAD dimensions such as `Ø20` or `88 ±0.1` and the drawing's vector lines |
-| Answers | Does this value meet the limit? | Which drawn lines or circle does this dimension refer to? |
-| Outcomes | Pass, Fail, Missing, Needs review | Verified, Unresolved (with the reason), Not supported |
-| Can it fail a part? | Yes, against your limits | Never: it is a statement about the drawing's graphics, not about the part |
-
-**New to engineering drawings?** A *dimension* is a measurement printed on the drawing. Its *tolerance* is how far the real part may differ (`±0.1`, or `+0` above `-0.2` printed as a *stacked* tolerance). *Extension lines* run from the part out to the *dimension line*, whose arrowheads mark what is measured; a *leader* is a line from a note to a feature such as a hole.
-
-**Other test drawings.** No third-party drawings are recommended here: none were found whose licence clearly allows redistribution and whose results were verified. Any one-page PDF with selectable text works as an upload; scans do not.
-
-## What works today (verified) and what does not
-
-**Verified in this repository** (synthetic fixtures; see Testing):
-
-* Single-page, text-based engineering PDFs: extraction of dimension annotations (thickness, diameter, length, with units) and material annotations.
-* Deterministic evaluation of a demonstration ruleset, with four outcomes: `pass`, `fail`, `missing`, `needs_review`.
-* A browser UI: upload or drop a PDF, see summary counts and findings, extracted measurements and source metadata, with plain-language explanations of every error.
-* The PDF rendered in the browser (PDF.js) with an evidence box on the exact text each finding relied on, correct for page rotation (0/90/180/270), crop boxes, zoom and screen pixel density.
-* Selecting a finding highlights its boxes and selecting a box selects its finding, by mouse and keyboard.
-
-**Not done:** real-CAD benchmarking, multi-page documents, scanned drawings, authentication, public deployment, report export, any AI model. See [Known limitations](#known-limitations).
-
-## Quick start (backend and frontend, local only)
-
-Requirements: Python 3.12+, [uv](https://docs.astral.sh/uv/), Node.js 24 (22.13+ works), npm. Tested on Windows 11 and Linux (CI).
+Requirements: Python 3.12+, [uv](https://docs.astral.sh/uv/), Node.js 24 (22.13+ works).
 
 ```bash
-# 1. backend (terminal 1)
+# terminal 1: backend
 cd backend
 uv sync --locked
 uv run uvicorn blueprintiq.api.app:create_app --factory --host 127.0.0.1 --port 8000
+```
 
-# 2. frontend (terminal 2)
+```bash
+# terminal 2: frontend
 cd frontend
 npm ci
 npm run build
-npm run start          # http://127.0.0.1:3000  (or: npm run dev)
+npm run start
 ```
 
-Open <http://127.0.0.1:3000> (the tool itself is at `/inspect`). The browser only talks to the Next.js app; its server-side proxy forwards uploads to the backend at `http://127.0.0.1:8000` (change with the server-only `BLUEPRINTIQ_BACKEND_URL`, which must be a loopback IP).
+Open <http://127.0.0.1:3000>. Use these commands (they bind to `127.0.0.1`); the app has no login, so do not expose it on a network as is.
 
-**Start both only through these commands.** `npm run dev` and `npm run start` bind Next.js to `127.0.0.1`; Next's own default is every network interface, so `npx next start` would expose the unauthenticated backend through the proxy. The proxy's `Host`/`Origin` checks defend against web pages, not other machines, and do not replace the binding. Keep uvicorn on `127.0.0.1` too.
-
-### Using it
-
-1. Drop a PDF on the drop area (or choose one). Try the demonstration fixtures in `backend/tests/fixtures/drawings/`: `valid_basic.pdf` (4 pass), `violations.pdf` (3 fail, 1 pass), `ambiguous.pdf` (all `needs_review`), `missing_material.pdf` (material `missing`), `cropped_rotated_90.pdf` (rotated and cropped page). Limits: one page, selectable text, 10 MiB.
-2. Read the summary cards (Fail, Needs review, Missing, Pass) and the findings: rule, severity, expected, actual, explanation, referenced measurements.
-3. On a wide screen (1024 px and up) the drawing appears beside the results with a box on each piece of evidence (fail solid, needs review dashed, pass dotted). Zoom, fit width, or hide the evidence and labels.
-4. Select a finding (its **Select** button or the card) to highlight its boxes and bring them into view; click or Tab to a box and press Enter to select its finding. A finding with no location is selectable and says why nothing is marked.
-5. Change the inspection requirements (minimum thickness, maximum diameter, length range, required material with an optional exact code) and press **Run inspection** or **Run again**. The starting values are demonstration values, not engineering standards. Results always state the requirements they were produced with, and are hidden if the form changes until you run again. Nothing is saved. See [docs/custom-requirements.md](docs/custom-requirements.md).
-
-Screenshots of the real running app are in [docs/screenshots/](docs/screenshots/) and embedded in [F2](docs/frontend-f2.md), [F3](docs/frontend-f3.md) and [F4](docs/frontend-f4.md).
-
-### Backend only
+**Or with Docker** (the production setup, see [deployment](docs/deployment.md)):
 
 ```bash
-cd backend
-uv run pytest                    # 1134 tests (3 skipped on Windows)
+docker build --build-arg SOURCE_URL=https://github.com/SHJony121/BlueprintIQ -t blueprintiq .
+docker run --rm -p 127.0.0.1:8080:8080 -e BLUEPRINTIQ_ALLOWED_HOSTS=localhost:8080 blueprintiq
+# then open http://localhost:8080
 ```
 
-Interactive API docs: <http://127.0.0.1:8000/docs>
+## Testing
 
-### API demonstration
+Every push runs the full suite in GitHub Actions on Linux: more than 1,400 backend tests (including the worker's failure and memory-limit behaviour), about 880 frontend unit and component tests, tests against the real Next.js server and the real backend, about 250 browser tests in Chromium, and container checks (non-root, read-only, health check, security headers, rate limits, clean shutdown). A separate workflow checks failure recovery at 512 MiB and 0.1 CPU.
 
-Upload a synthetic drawing (from the `backend/` directory, with the server running):
+Results are checked against 32 synthetic drawings and generated geometry whose expected outcomes are written independently of the code. **No accuracy figure is claimed**, and there is no benchmark on real CAD drawings. Details: [testing and evaluation](docs/testing-and-evaluation.md).
 
-```bash
-curl -s http://127.0.0.1:8000/healthz
-# {"status":"ok"}
+## Limitations
 
-curl -s -X POST http://127.0.0.1:8000/api/v1/inspections \
-  -H "Content-Type: application/pdf" \
-  -H "X-Filename: violations.pdf" \
-  --data-binary @tests/fixtures/drawings/violations.pdf
-```
+- One-page PDFs with selectable text only: no scans or OCR, no multi-page files, no DWG.
+- Angled text is skipped and reported; GD&T frames, threads and ordinate dimensions are not read; angle dimensions are read but not tied to geometry.
+- English labels and a documented annotation grammar. Tested on synthetic drawings and one real CAD export; real-world coverage is not established.
+- Material rules check that a material is written (or matches a code exactly), not whether it is suitable.
+- The drawing viewer needs a screen at least 1024 px wide.
 
-The response is an `InspectionReport`. An excerpt of the real output for `violations.pdf`:
+Full list: [testing and evaluation](docs/testing-and-evaluation.md#limitations).
 
-```json
-{
-  "document": {"filename": "violations.pdf", "page_count": 1, "size_bytes": 1319},
-  "measurements": [
-    {"id": "M1", "kind": "dimension", "dimension_type": "thickness",
-     "value": "2", "unit": "mm", "normalized_value_mm": "2", "status": "parsed",
-     "source": {"page_number": 1, "raw_text": "THICKNESS: 2 mm",
-                "bbox": {"x0": 72.0, "y0": 549.25, "x1": 159.79, "y1": 562.99}}}
-  ],
-  "findings": [
-    {"id": "F1", "rule_id": "THK-MIN-001", "status": "fail", "severity": "error",
-     "measurement_ids": ["M1"],
-     "evidence": [{"measurement_id": "M1", "page_number": 1,
-                   "bbox": {"x0": 72.0, "y0": 549.25, "x1": 159.79, "y1": 562.99}}],
-     "expected": ">= 3 mm", "actual": "2 mm",
-     "message": "Thickness 2 mm is below the configured minimum of 3 mm."}
-  ],
-  "summary": {"passed": 1, "failed": 3, "missing": 0, "needs_review": 0}
-}
-```
+## Security and deployment
 
-Try the other fixtures in `backend/tests/fixtures/drawings/`: `ambiguous.pdf` (every outcome is `needs_review`), `conflicting.pdf` (4 mm vs 6 mm thickness → `needs_review`, never a verdict), `missing_material.pdf` (`MAT-REQ-001` is `missing`), `unit_conversion.pdf` (`0.3 cm` = exactly 3 mm, a boundary pass), `rotated_90.pdf`, `cropped_rotated_90.pdf`. Refused files return a typed error, e.g. `multi_page.pdf` → `422 TOO_MANY_PAGES`.
+Uploads are streamed with a 10 MiB cap, validated, and processed in isolated worker processes with time and memory limits. The production container adds host allow-listing, per-client rate limits, security headers, and runs as a non-root user with a read-only filesystem. It has been measured at free-hosting limits (512 MiB, 0.1 CPU) but is **not yet deployed**. See [security](docs/security-and-deployment.md), [deployment](docs/deployment.md), [free hosting](docs/free-hosting.md) and the [Render Free guide](docs/render-free.md).
 
-A worked walkthrough is in [docs/walkthrough.md](docs/walkthrough.md).
+## Project documentation
 
-## Frontend
+[Architecture](docs/architecture.md) · [Walkthrough](docs/walkthrough.md) · [Custom requirements](docs/custom-requirements.md) · [CAD annotations](docs/cad-annotations.md) · [Feature association](docs/feature-association.md) · [Testing](docs/testing-and-evaluation.md) · [Security](docs/security-and-deployment.md) · [Deployment](docs/deployment.md) · [Design spec](docs/design/phase1-mvp-spec.md)
 
-```mermaid
-flowchart LR
-    B[Browser<br/>Next.js UI + PDF.js] -->|"POST /api/inspections (PDF)"| P[Next.js proxy<br/>Node runtime, 127.0.0.1]
-    P -->|fixed path, allow-listed headers| A[FastAPI backend]
-    B -.->|file stays local| V[PDF.js viewer]
-```
-
-* **Proxy** (`frontend/src/server`): one route; server-only loopback backend address, header allow-list, streamed upload counted against 10 MiB, response size and shape checks, no redirects followed, timeouts, abort on disconnect ([F1](docs/frontend-f1.md)).
-* **Dashboard** (`src/components`, `src/inspection`, `src/api`): one state machine, types generated from the backend's OpenAPI snapshot, runtime-checked responses ([F2](docs/frontend-f2.md)).
-* **Viewer** (`src/viewer`): PDF.js rendering, pure coordinate mapping through PDF.js's own viewport, file-identity and page-geometry checks before any box is drawn ([F3](docs/frontend-f3.md)).
-* **Linking**: finding and box selection kept in sync ([F4](docs/frontend-f4.md)).
-
-### Website, samples and information pages (Launch-2)
-
-* `/` is a landing page (what it does, supported drawings, how it works, limits); `/inspect` is the tool; `/about` explains the method and where it stops; `/privacy` says what happens to an upload and what is **not** promised; there are 404 and error pages, page metadata and an icon. A social-preview image is linked only when `NEXT_PUBLIC_SITE_URL` is set at build time.
-* **Sample drawings:** `frontend/public/samples/` holds two original, synthetic PDFs generated by `backend/scripts/generate_samples.py` (invented parts; no real drawing or third-party content; a test keeps them current). "Try Sample" fetches one and sends it through the same upload, validation and backend inspection as any file, with the demonstration requirements, which are examples and not standards.
-* **Small screens:** the landing page, upload and results work on a phone. The PDF evidence viewer is shown from the `lg` breakpoint up; below it a note says so and links to the results. Screenshots: [landing](docs/screenshots/launch2-landing-desktop.png), [sample results](docs/screenshots/launch2-sample-results-desktop.png), [landing on a phone](docs/screenshots/launch2-landing-mobile.png), [results on a phone](docs/screenshots/launch2-results-mobile.png).
-
-## API
+<details>
+<summary><b>API</b></summary>
 
 | Endpoint | Purpose |
 |---|---|
-| `GET /healthz` | Liveness only; reveals no configuration. |
-| `POST /api/v1/inspections` | Body: the PDF bytes, `Content-Type: application/pdf`. Optional `X-Filename` header (percent-encoded, display only). Optional `X-Inspection-Requirements` header (percent-encoded JSON, at most 2048 characters; see [custom requirements](docs/custom-requirements.md)). Returns an `InspectionReport`. |
+| `GET /healthz` | Liveness only. |
+| `POST /api/v1/inspections` | Body: the PDF bytes (`Content-Type: application/pdf`). Optional `X-Filename` and `X-Inspection-Requirements` headers ([custom requirements](docs/custom-requirements.md)). Returns an inspection report. |
 
-Every error is `{"error": {"code", "message", "request_id"}}` with the same id in the `X-Request-ID` header. Codes: `FILE_TOO_LARGE` (413), `UNSUPPORTED_CONTENT_TYPE` / `UNSUPPORTED_FILE_TYPE` (415), `UPLOAD_TIMEOUT` (408), `SERVER_BUSY` (503), `INTERNAL_ERROR` (500), and `422` for PDFs that are refused or exceed limits (`INVALID_PDF`, `ENCRYPTED_PDF`, `TOO_MANY_PAGES`, `NO_TEXT_LAYER`, `UNSUPPORTED_GEOMETRY`, `PARTIALLY_VISIBLE_TEXT`, `PAGE_TOO_COMPLEX`, `TOO_MANY_TEXT_LINES`, `PROCESSING_TIMEOUT`, `RESOURCE_LIMIT_EXCEEDED`, `PROCESSING_FAILED`), and `422 INVALID_REQUIREMENTS` for a bad requirements header. Full contract: [spec §17](docs/design/phase1-mvp-spec.md).
+Errors are always `{"error": {"code", "message", "request_id"}}`. Full contract: [design spec](docs/design/phase1-mvp-spec.md).
+</details>
 
-Settings (environment variables, prefix `BLUEPRINTIQ_`): `RULESET_PATH`, `MAX_UPLOAD_BYTES`, `JOB_TIMEOUT_S`, `JOB_MEMORY_LIMIT_MB`, `MAX_CONCURRENT_JOBS`, `MAX_ADMITTED_REQUESTS`, `QUEUE_TIMEOUT_S`, `UPLOAD_TIMEOUT_S`, `LOG_LEVEL`. The default ruleset is the demonstration file shipped inside the package (`backend/src/blueprintiq/rules/demo_rules.toml`); set `BLUEPRINTIQ_RULESET_PATH` to use your own.
+<details>
+<summary><b>Repository layout</b></summary>
 
-## How the pieces fit
-
-```mermaid
-flowchart LR
-    C[Client] -->|PDF bytes| API[api: FastAPI<br/>admission, size limit, envelope]
-    API -->|bytes| W[worker process<br/>timeout, memory limit*]
-    subgraph W2[inside the disposable worker]
-        direction LR
-        L[ingestion<br/>validate PDF] --> T[text_layer<br/>lines + page-space boxes]
-        T --> P[annotation_parser<br/>typed measurements]
-        P --> R[rules engine<br/>findings + evidence]
-    end
-    W --- W2
-    R -->|InspectionReport JSON| API
-    CFG[(rules TOML<br/>validated at startup)] --> R
-    API -->|JSON| C
 ```
-
-\* the memory limit is enforced on Linux only.
-
-| Milestone | Module | Responsibility |
-|---|---|---|
-| M1 | `domain/` | Pydantic models, exact `Decimal` units, evidence geometry; the report validator rejects a confirmed outcome built on an uncertain measurement. |
-| M2 | `extraction/annotation_parser.py` | Text lines → measurements; ambiguity is flagged, never guessed. |
-| M3 | `ingestion/`, `extraction/text_layer.py`, `reader.py` | Safe PDF reading, visibility, coordinates, segmentation, cost limits. |
-| M4 | `rules/`, `inspection.py` | TOML rules, deterministic evaluation, duplicate/conflict policy. |
-| M5 | `api/` | HTTP layer, upload safety, process isolation, logging. |
-
-Details: [docs/architecture.md](docs/architecture.md).
-
-## Testing and evaluation
-
-All executed and passing in GitHub Actions (Linux) on the milestone commit; no accuracy percentage is claimed.
-
-| Suite | Command | Count |
-|---|---|---|
-| Backend (ruff, mypy --strict, pytest) | `cd backend && uv run pytest` | 1444 |
-| Frontend unit and component (Vitest) | `cd frontend && npm test` | 784 |
-| Proxy against the real Next.js server, launch binding | `npm run test:server` (after `npm run build`) | 24 |
-| Frontend against the real FastAPI backend | `npm run test:backend` | 185 |
-| Browser, Chromium via Playwright, real backend | `npm run test:e2e` (after build; first `npx playwright install chromium`) | 231 |
-
-Also `npm run lint`, `npm run typecheck`, `npm run api:check` (generated API types match `backend/openapi.json`). Details: [docs/testing-and-evaluation.md](docs/testing-and-evaluation.md) (backend) and [F3](docs/frontend-f3.md#verification) (how overlay alignment is measured against rendered pixels and independent ground truth). Correctness is shown on **32 synthetic fixtures** (plus 12 generated geometry cases) whose expected results are written independently of the code under test; there is **no benchmark on real CAD drawings**.
-
-## Known limitations
-
-* Verified on synthetic drawings only; real CAD output (embedded fonts, per-glyph positioning, hatch clips) and **Japanese drawings are not benchmarked**, and some valid drawings will be refused or flagged ambiguous.
-* The PDF viewer appears only at desktop widths (1024 px and up); on narrower screens the findings still work without it.
-* Overlay alignment is measured on synthetic pages (Helvetica and Courier); misplacement smaller than about 3 pt would not be detected by the tests.
-* One F1 proxy test failed once, unexplained, and never recurred (details in [F2](docs/frontend-f2.md#known-limitations-and-notes)); no other known flaky tests. Browser tests need Chromium installed.
-* Single-page, vector/text PDFs only; no scans/OCR, DWG, multi-page, `/UserUnit` scaling. Text at other than right angles is **not read**: it is skipped and the report says "Incomplete extraction" with the number of lines; if such a line carries a supported label (`THICKNESS:` and so on) the file is refused (`UNSUPPORTED_GEOMETRY`) instead.
-* English labels and the documented annotation grammar only. Conventional CAD dimensions and tolerances (`2.7 ±0.1`, `Ø12`, `R1.5`, `75° ±0.5°`) are listed as **CAD annotations** read as written; no rule checks them ([docs/cad-annotations.md](docs/cad-annotations.md)). Where the PDF's own vector lines prove it (a leader or dimension line ending in arrowheads on a circle, an arc, or two extension lines), an annotation is tied to that drawn geometry and can be shown on the drawing ([docs/feature-association.md](docs/feature-association.md)); otherwise it says why the association is unresolved. Linear dimensions were checked on one real drawing; diameter and radius associations have only been tested on generated PDFs. Rules still apply per labeled measurement type, not per feature.
-* Material rules check **presence**, or an exact match of the code written on the drawing; they never judge whether a material is suitable.
-* The default rules are demonstration constraints; user-set requirements are limited to the four listed in [docs/custom-requirements.md](docs/custom-requirements.md), apply per measurement type, and are not saved.
-* About 1.2 s per request on Windows (a fresh worker process each time).
-
-Full list: [docs/testing-and-evaluation.md](docs/testing-and-evaluation.md#limitations) and [docs/security-and-deployment.md](docs/security-and-deployment.md).
-
-## Security and release restrictions
-
-**Public deployment is blocked.** Launch-1 added production hardening and a container (allow-listed hosts, trusted-proxy client identity, per-client rate and concurrency limits, security headers, no diagnostic or docs endpoints, worker cancellation on disconnect); see [docs/deployment.md](docs/deployment.md). It is not deployed. Remaining blockers include a public source repository for the AGPL source offer, a chosen host with TLS (Linux resource measurements are in the free-hosting document), and real CAD PDFs not being benchmarked. Without the production settings the app is for trusted local use only. The licence is **AGPL-3.0-or-later** (see [Licence](#licence)). See [docs/security-and-deployment.md](docs/security-and-deployment.md). Linux resource measurements at Render Free-sized limits (512 MiB, 0.1 CPU) and the free-hosting assessment are in [docs/free-hosting.md](docs/free-hosting.md); the Render Free trial configuration is in [docs/render-free.md](docs/render-free.md) and the checklist for publishing the corresponding source in [docs/source-release-checklist.md](docs/source-release-checklist.md).
+backend/src/blueprintiq/   extraction, rules, API, worker isolation
+backend/tests/             unit, integration and API tests, synthetic fixtures
+backend/scripts/           fixture and sample generators
+frontend/src/              Next.js app, server proxy, inspection UI, PDF viewer
+frontend/public/samples/   the downloadable sample drawings
+frontend/tests/            proxy, UI and browser tests
+deploy/                    container entrypoint, health check, smoke test, benchmarks
+docs/                      design, architecture, testing, deployment, screenshots
+```
+</details>
 
 ## Licence
 
-BlueprintIQ is free software under the **GNU Affero General Public License, version 3 or (at your option) any later version** (see [LICENSE](LICENSE)); copyright (C) 2026 Shahriar Hasan Jony. The PDF engine, PyMuPDF/MuPDF, is AGPL-3.0 (or commercial), and BlueprintIQ uses it under the AGPL-3.0, so the whole project carries the same licence. Anyone using a deployed copy over a network is entitled to its source: a deployment sets `NEXT_PUBLIC_SOURCE_URL` to the public repository of the version it runs, and the page footer links it. Third-party licences are listed in [NOTICE.md](NOTICE.md). The software comes with no warranty and is not certified engineering-compliance software.
-
-## Roadmap
-
-1. **Phase 1.5 (hardening):** benchmark on real, permissioned CAD PDFs; warm worker pool; disconnect cancellation; clip-scope handling; licence decision.
-2. **Phase 2 (frontend):** done locally on `feat/phase2a-frontend` ([F0](docs/frontend-f0.md) scaffold, [F1](docs/frontend-f1.md) proxy, [F2](docs/frontend-f2.md) dashboard, [F3](docs/frontend-f3.md) viewer and overlays, [F4](docs/frontend-f4.md) linking). Not done: report export, multi-page viewing, a Docker or deployment story.
-3. **Phase 3 (assistive AI, optional):** vision-language interpretation for scanned/unlabeled drawings behind the same evidence and uncertainty rules; human review workflow.
-
-## Repository layout
-
-```
-backend/src/blueprintiq/   domain, ingestion, extraction, rules (+ demo_rules.toml), api, inspection.py
-backend/tests/             unit, integration, api, fixtures (PDFs + independent ground truth)
-backend/scripts/           generate_fixtures.py
-docs/design/               Phase 1 specification, ADR-001
-backend/openapi.json       API contract snapshot; frontend types are generated from it
-frontend/src/              app (routes, proxy route), server (proxy), api, inspection, components, viewer
-frontend/tests/            proxy, ui, e2e (Playwright; geometry_fixtures.py generates extra test PDFs)
-docs/                      architecture, walkthrough, testing & evaluation, security, frontend-f0..f4
-docs/screenshots/          real screenshots of the running app (F2, F3, F4)
-.github/workflows/         backend-ci.yml; frontend-ci.yml (checks, proxy-backend, browser); container-ci.yml
-Dockerfile, deploy/        single-container image: launch config, entrypoint, health check, smoke test
-```
+Free software under the **GNU Affero General Public License v3.0 or later** ([LICENSE](LICENSE)). Copyright (C) 2026 Shahriar Hasan Jony. The PDF engine, PyMuPDF/MuPDF, is AGPL-3.0, so the whole project is too: anyone using a deployed copy is entitled to its source, and the site's footer links it. Third-party licences: [NOTICE.md](NOTICE.md). No warranty; not certified engineering-compliance software.
